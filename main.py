@@ -8,15 +8,11 @@ cfg = ConfigParser()
 cfg.read('config.ini')
 
 max_measures = []
-banchi = []
 
-# GET "BANCHI"' INFO
+# LOAD AREAS INFO
 with open("files/banchi.geojson") as input_file:
     data = json.load(input_file)
-    for feature in data["features"]:
-        props = feature["properties"]
-        banchi.append({"code": props["CODICE"], "site_name": props["DENOMINAZI"], "bbox": feature["bbox"],
-                       "coordinates": feature["geometry"]["coordinates"]})
+    areas = data["features"]
 
 # REMOVE MEASURES DUPLICATES
 lines = pd.read_csv('files/misurazioni.csv', delimiter=';')
@@ -41,8 +37,8 @@ for line in lines.iterrows():
 
 # CREATE DATASET
 for measure in max_measures:
-    index = [i for i, _ in enumerate(banchi) if _['site_name'] == measure['site_name']][0]
-    bbox = banchi[index]['bbox']
+    index = [i for i, _ in enumerate(areas) if _['properties']['DENOMINAZI'] == measure['site_name']][0]
+    bbox = areas[index]['bbox']
     date = measure['datetime']
 
     for i in range(int(cfg.get('variables', 'START')), int(cfg.get('variables', 'END')) + 1):
