@@ -1,0 +1,10 @@
+{
+"type": "FeatureCollection",
+"name": "Aree molloschicoltura SINVSA Campania",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"bbox": [ 13.76376, 40.3672500000001, 14.9612500000001, 41.2198900000001 ],                                                        
+"features": [
+    { "type": "Feature", "properties": { "OBJECTID": 154, "ZMOL_ID": 154, "ASL": "R205", "CODICE": "1500021", "DENOMINAZI": "LUCRINO", "DESCR_ESTE": null, "REG_DESCRI": "CAMPANIA", "LONG_CENTR": 14.0949889, "LAT_CENTR": 40.82014576, "COD_CLASSI": "B", "DESC_CLASS": "B", "TIPO": "ALLEVAMENTI", "SPECIE_COD": "MME", "SPECIE_ID": 52, "SPECIE_DES": "MYTILUS GALLOPROVENCIALIS MITILO", "DELIBERA": "D.D.265-07-09-2015", "DT_DELIBER": "2015\/09\/07", "TIPO_DELEG": "R" }, "bbox": [ 14.08933, 40.81717, 14.1, 40.82423 ], "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 14.094233, 40.82423 ], [ 14.097533, 40.82413 ], [ 14.1, 40.81983 ], [ 14.1, 40.81717 ], [ 14.089933, 40.81717 ], [ 14.08933, 40.81983 ], [ 14.094233, 40.82423 ] ] ] ] } },
+    { "type": "Feature", "properties": { "OBJECTID": 62, "ZMOL_ID": 62, "ASL": "R205", "CODICE": "1500014", "DENOMINAZI": "PUNTA TERONE - CAPO MISENO", "DESCR_ESTE": null, "REG_DESCRI": "CAMPANIA", "LONG_CENTR": 14.09451887, "LAT_CENTR": 40.78305851, "COD_CLASSI": "A", "DESC_CLASS": "A", "TIPO": "ALLEVAMENTI", "SPECIE_COD": "MME", "SPECIE_ID": 52, "SPECIE_DES": "MYTILUS GALLOPROVENCIALIS MITILO", "DELIBERA": "D.D. n.177", "DT_DELIBER": "2021\/06\/03", "TIPO_DELEG": "R" }, "bbox": [ 14.092591, 40.77931, 14.096725, 40.78718 ], "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 14.092888, 40.78718 ], [ 14.096725, 40.78598 ], [ 14.096066, 40.77944 ], [ 14.092591, 40.77931 ], [ 14.092888, 40.78718 ] ] ] ] } }
+]
+}
