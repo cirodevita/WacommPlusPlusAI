@@ -100,7 +100,7 @@ def create_dataset(areas, max_measures):
                         for j in range(index_min_long, index_max_long+1):
                             if concentration[k][i][j] > max:
                                 max = concentration[k][i][j]
-                features.append(max)
+                features.append(str(max))
             except:
                 f.write(url + '\n')
                 features.append('--')
@@ -119,4 +119,5 @@ if __name__ == "__main__":
     max_measures = remove_measures_duplicates()
     dataset = create_dataset(areas, max_measures)
 
-    print(dataset)
+    with open('dataset.json', 'w', encoding='utf-8') as f:
+        json.dump(dataset, f)
