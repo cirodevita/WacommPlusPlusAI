@@ -3,6 +3,7 @@ import json
 import netCDF4
 from datetime import datetime, timedelta
 from configparser import ConfigParser
+from shapely.geometry import Point, Polygon
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -45,10 +46,27 @@ def remove_measures_duplicates():
 
 
 def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
-    index_min_lat = min(range(len(lat)), key=lambda i: abs(lat[i] - min_lat))
-    index_max_lat = min(range(len(lat)), key=lambda i: abs(lat[i] - max_lat))
-    index_min_long = min(range(len(long)), key=lambda i: abs(long[i] - min_long))
-    index_max_long = min(range(len(long)), key=lambda i: abs(long[i] - max_long))
+    N = len(lat)
+    sum_delta_lat = 0
+    for i in range(1, N):
+        sum_delta_lat += lat[i] - lat[i-1]
+    delta_lat = sum_delta_lat/N
+
+    M = len(long)
+    sum_delta_long = 0
+    for i in range(1, M):
+        sum_delta_long += long[i] - long[i - 1]
+    delta_long = sum_delta_long / M
+
+    index_min_lat = round((min_lat - lat[0])/delta_lat)
+    index_max_lat = round((max_lat - lat[0])/delta_lat)
+    index_min_long = round((min_long - long[0])/delta_long)
+    index_max_long = round((max_long - long[0])/delta_long)
+
+    # index_min_lat1 = min(range(len(lat)), key=lambda i: abs(lat[i] - min_lat))
+    # index_max_lat1 = min(range(len(lat)), key=lambda i: abs(lat[i] - max_lat))
+    # index_min_long1 = min(range(len(long)), key=lambda i: abs(long[i] - min_long))
+    # index_max_long1 = min(range(len(long)), key=lambda i: abs(long[i] - max_long))
 
     return index_min_lat, index_max_lat, index_min_long, index_max_long
 
@@ -66,6 +84,10 @@ def create_dataset(areas, max_measures):
         min_lat = bbox[1]
         max_long = bbox[2]
         max_lat = bbox[3]
+
+        coordinates = areas[index]['geometry']['coordinates'][0][0]
+
+        area_poly = Polygon(coordinates)
 
         date = measure['datetime']
 
@@ -98,8 +120,10 @@ def create_dataset(areas, max_measures):
                 for k in range(0, 2):
                     for i in range(index_min_lat, index_max_lat+1):
                         for j in range(index_min_long, index_max_long+1):
-                            if concentration[k][i][j] > max:
-                                max = concentration[k][i][j]
+                            point = Point(long[j], lat[i])
+                            if point.within(area_poly):
+                                if concentration[k][i][j] > max:
+                                    max = concentration[k][i][j]
                 features.append(str(max))
             except:
                 f.write(url + '\n')
