@@ -24,23 +24,25 @@ def remove_measures_duplicates():
 
     lines = pd.read_csv(cfg.get('files', 'MEASURES'), delimiter=';')
     for line in lines.iterrows():
-        id = line[1]['NUMERO SCHEDA']
-        date = line[1]['DATA PRELIEVO'] + cfg.get('variables', 'SAMPLE_HOUR')
-        outcome = line[1]['ESITO']
-        site = line[1]['SITO']
-        lat = line[1]['LATITUDINE_DEF']
-        lon = line[1]['LONGITUDINE_DEF']
+        if line[1]['ANNO ACCETTAZIONE'] == cfg.getint('variables', 'YEAR'):
+            id = line[1]['NUMERO SCHEDA']
+            date = line[1]['DATA PRELIEVO'] + cfg.get('variables', 'SAMPLE_HOUR')
+            outcome = line[1]['ESITO']
+            site = line[1]['SITO']
+            lat = line[1]['LATITUDINE_DEF']
+            lon = line[1]['LONGITUDINE_DEF']
+            year = line[1]['ANNO ACCETTAZIONE']
 
-        if not any(d['id'] == id for d in max_measures):
-            max_measures.append({"id": id, 'site_name': site, 'datetime': date, 'latitude': lat, 'longitude': lon,
-                                 'outcome': outcome})
-        else:
-            index = [i for i, _ in enumerate(max_measures) if _['id'] == id][0]
-            if outcome > max_measures[index]['outcome']:
-                max_measures[index]['outcome'] = outcome
-                max_measures[index]['datetime'] = date
-                max_measures[index]['latitude'] = lat
-                max_measures[index]['longitude'] = lon
+            if not any(d['id'] == id for d in max_measures):
+                max_measures.append({"id": id, 'site_name': site, 'datetime': date, 'latitude': lat, 'longitude': lon,
+                                     'outcome': outcome, 'year': year})
+            else:
+                index = [i for i, _ in enumerate(max_measures) if _['id'] == id][0]
+                if outcome > max_measures[index]['outcome']:
+                    max_measures[index]['outcome'] = outcome
+                    max_measures[index]['datetime'] = date
+                    max_measures[index]['latitude'] = lat
+                    max_measures[index]['longitude'] = lon
 
     return max_measures
 
@@ -63,21 +65,43 @@ def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
     index_min_long = round((min_long - long[0])/delta_long)
     index_max_long = round((max_long - long[0])/delta_long)
 
-    # index_min_lat1 = min(range(len(lat)), key=lambda i: abs(lat[i] - min_lat))
-    # index_max_lat1 = min(range(len(lat)), key=lambda i: abs(lat[i] - max_lat))
-    # index_min_long1 = min(range(len(long)), key=lambda i: abs(long[i] - min_long))
-    # index_max_long1 = min(range(len(long)), key=lambda i: abs(long[i] - max_long))
-
     return index_min_lat, index_max_lat, index_min_long, index_max_long
+
+
+def getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly):
+    try:
+        dataset = netCDF4.Dataset(url)
+        long = dataset.variables['longitude']
+        lat = dataset.variables['latitude']
+
+        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                          min_lat, max_lat,
+                                                                                          min_long, max_long)
+
+        concentration = dataset.variables['conc'][0]
+        max = float("-inf")
+        for k in range(0, 2):
+            for i in range(index_min_lat, index_max_lat + 1):
+                for j in range(index_min_long, index_max_long + 1):
+                    point = Point(long[j], lat[i])
+                    if point.within(area_poly):
+                        if concentration[k][i][j] > max:
+                            max = concentration[k][i][j]
+    except:
+        f.write(url + '\n')
+        f.flush()
+        max = "NaN"
+
+    return max
 
 
 # CREATE DATASET
 def create_dataset(areas, max_measures):
     my_dataset = []
-    f = open("url_mancanti.txt", "a")
+    f = open("test/url_mancanti.txt", "a")
 
     for measure in max_measures:
-        index = [i for i, _ in enumerate(areas) if _['properties']['DENOMINAZI'] == measure['site_name']][0]
+        index = [i for i, _ in enumerate(areas) if (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
 
         bbox = areas[index]['bbox']
         min_long = bbox[0]
@@ -93,7 +117,9 @@ def create_dataset(areas, max_measures):
 
         sample = measure['outcome']
 
-        _dataset = {"features": [], "label": sample, "site": measure['site_name']}
+        year = measure['year']
+
+        _dataset = {"features": [], "label": sample, "site": measure['site_name'], 'year': year}
         features = []
 
         for i in range(cfg.getint('variables', 'START'), cfg.getint('variables', 'END') + 1):
@@ -106,28 +132,9 @@ def create_dataset(areas, max_measures):
 
             url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + ".nc"
 
-            try:
-                dataset = netCDF4.Dataset(url)
-                long = dataset.variables['longitude']
-                lat = dataset.variables['latitude']
+            max = getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly)
 
-                index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
-                                                                                                  min_lat, max_lat,
-                                                                                                  min_long, max_long)
-
-                concentration = dataset.variables['conc'][0]
-                max = float("-inf")
-                for k in range(0, 2):
-                    for i in range(index_min_lat, index_max_lat+1):
-                        for j in range(index_min_long, index_max_long+1):
-                            point = Point(long[j], lat[i])
-                            if point.within(area_poly):
-                                if concentration[k][i][j] > max:
-                                    max = concentration[k][i][j]
-                features.append(str(max))
-            except:
-                f.write(url + '\n')
-                features.append('--')
+            features.append(str(max))
 
         _dataset["features"] = features
 
