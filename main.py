@@ -4,6 +4,8 @@ import netCDF4
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from shapely.geometry import Point, Polygon
+from multiprocessing.pool import ThreadPool as Pool
+
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -68,7 +70,7 @@ def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
     return index_min_lat, index_max_lat, index_min_long, index_max_long
 
 
-def getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly):
+def getMaxConc(f, url, min_lat, max_lat, min_long, max_long, area_poly):
     try:
         dataset = netCDF4.Dataset(url)
         long = dataset.variables['longitude']
@@ -85,8 +87,9 @@ def getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly):
                 for j in range(index_min_long, index_max_long + 1):
                     point = Point(long[j], lat[i])
                     if point.within(area_poly):
-                        if concentration[k][i][j] > max:
-                            max = concentration[k][i][j]
+                        value = concentration[k][i][j]
+                        if value > max:
+                            max = value
     except:
         f.write(url + '\n')
         f.flush()
@@ -95,51 +98,63 @@ def getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly):
     return max
 
 
+# WORKER
+def worker(dataset, measure, file):
+    index = [i for i, _ in enumerate(areas) if (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
+
+    bbox = areas[index]['bbox']
+    min_long = bbox[0]
+    min_lat = bbox[1]
+    max_long = bbox[2]
+    max_lat = bbox[3]
+
+    coordinates = areas[index]['geometry']['coordinates'][0][0]
+
+    area_poly = Polygon(coordinates)
+
+    date = measure['datetime']
+
+    sample = measure['outcome']
+
+    year = measure['year']
+
+    _dataset = {"features": [], "label": sample, "site": measure['site_name'], 'year': year}
+    features = []
+
+    print(measure)
+
+    for i in range(cfg.getint('variables', 'START'), cfg.getint('variables', 'END') + 1):
+        reference_hour = datetime.strptime(date, '%d/%m/%y/%H:%M') - timedelta(hours=i)
+        formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
+
+        year = str(reference_hour.year)
+        month = '{:>02d}'.format(reference_hour.month)
+        day = '{:>02d}'.format(reference_hour.day)
+
+        url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + ".nc"
+
+        max = getMaxConc(file, url, min_lat, max_lat, min_long, max_long, area_poly)
+
+        features.append(str(max))
+
+    _dataset["features"] = features
+
+    my_dataset.append(_dataset)
+
+
 # CREATE DATASET
 def create_dataset(areas, max_measures):
     my_dataset = []
     f = open("test/url_mancanti.txt", "a")
 
+    pool_size = 16
+    pool = Pool(pool_size)  
+
     for measure in max_measures:
-        index = [i for i, _ in enumerate(areas) if (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
+        pool.apply_async(worker, (my_dataset, measure, f,))
 
-        bbox = areas[index]['bbox']
-        min_long = bbox[0]
-        min_lat = bbox[1]
-        max_long = bbox[2]
-        max_lat = bbox[3]
-
-        coordinates = areas[index]['geometry']['coordinates'][0][0]
-
-        area_poly = Polygon(coordinates)
-
-        date = measure['datetime']
-
-        sample = measure['outcome']
-
-        year = measure['year']
-
-        _dataset = {"features": [], "label": sample, "site": measure['site_name'], 'year': year}
-        features = []
-
-        for i in range(cfg.getint('variables', 'START'), cfg.getint('variables', 'END') + 1):
-            reference_hour = datetime.strptime(date, '%d/%m/%y/%H:%M') - timedelta(hours=i)
-            formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
-
-            year = str(reference_hour.year)
-            month = f'{reference_hour.month:02}'
-            day = f'{reference_hour.day:02}'
-
-            url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + ".nc"
-
-            max = getMaxConc(url, min_lat, max_lat, min_long, max_long, area_poly)
-
-            features.append(str(max))
-
-        _dataset["features"] = features
-
-        my_dataset.append(_dataset)
-
+    pool.close()
+    pool.join()
     f.close()
 
     return my_dataset
