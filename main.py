@@ -4,6 +4,7 @@ import netCDF4
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from shapely.geometry import Point, Polygon
+import multiprocessing
 from multiprocessing.pool import ThreadPool as Pool
 
 
@@ -99,7 +100,7 @@ def getMaxConc(f, url, min_lat, max_lat, min_long, max_long, area_poly):
 
 
 # WORKER
-def worker(dataset, measure, file):
+def worker(areas, my_dataset, measure, file):
     index = [i for i, _ in enumerate(areas) if (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
 
     bbox = areas[index]['bbox']
@@ -145,17 +146,17 @@ def worker(dataset, measure, file):
 # CREATE DATASET
 def create_dataset(areas, max_measures):
     my_dataset = []
-    f = open("test/url_mancanti.txt", "a")
+    file = open("test/url_mancanti.txt", "a")
 
-    pool_size = 16
+    pool_size = multiprocessing.cpu_count()
     pool = Pool(pool_size)  
 
     for measure in max_measures:
-        pool.apply_async(worker, (my_dataset, measure, f,))
+        pool.apply_async(worker, (areas, my_dataset, measure, file,))
 
     pool.close()
     pool.join()
-    f.close()
+    file.close()
 
     return my_dataset
 

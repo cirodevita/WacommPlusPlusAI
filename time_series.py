@@ -65,7 +65,8 @@ for area in areas:
             y1 = np.array(measures)
 
             fig = plt.figure()
-            fig.suptitle(area['properties']['DENOMINAZI'] + " " + calendar.month_name[int(temp_month)] + " " + year, fontsize=20)
+            fig.suptitle(area['properties']['DENOMINAZI'] + " " + calendar.month_name[int(temp_month)] + " " + year,
+                         fontsize=20)
 
             ax = fig.add_subplot()
             ax.plot(x, y, linewidth=0.2, color='black')
@@ -83,6 +84,9 @@ for area in areas:
             ax2.set_ylabel("E. coil/100g FIL")
             ax.set_xticks([x[0], x[-1]])
             ax2.set_yticks([67, 230, 500])
+
+            if len(x1) != 0:
+                plt.fill_between(x, 0, y, color='green', where=(x < x1[-1]) & (x > x1[-1] - datetime.timedelta(hours=168)))
 
             plt.show()
 
