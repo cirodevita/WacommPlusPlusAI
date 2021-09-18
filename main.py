@@ -146,7 +146,6 @@ def worker(areas, my_dataset, measure, file):
     print(_dataset)
     _file = open("temp_dataset.txt", "a")
     _file.write(_dataset)
-    _file.flush()
     _file.close()
 
     my_dataset.append(_dataset)
