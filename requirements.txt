@@ -2,3 +2,4 @@ pandas
 netCDF4
 Shapely
 numpy
+matplotlib
