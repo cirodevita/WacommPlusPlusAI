@@ -4,6 +4,7 @@ import numpy as np
 from configparser import ConfigParser
 from shapely.geometry import Polygon
 import calendar
+from pathlib import Path
 
 from main import load_areas, getMaxConc, remove_measures_duplicates
 
@@ -12,6 +13,7 @@ cfg.read('config.ini')
 
 areas = load_areas()
 max_measures = remove_measures_duplicates()
+
 
 time_series = []
 for area in areas:
@@ -23,6 +25,8 @@ _month = 1
 _day = 1
 
 _hours = 8760
+
+file = open("test/url_mancanti.txt", "a")
 
 for i in range(0, _hours + 1):
     reference_hour = datetime.datetime(_year, _month, _day, 0, 0) + datetime.timedelta(hours=i)
@@ -47,17 +51,28 @@ for i in range(0, _hours + 1):
                  (_['name']).replace(" ", "") == (area['properties']['DENOMINAZI']).replace(" ", "")][0]
 
         time_series[index]['datetime'].append(reference_hour)
-        # max = getMaxConc(url, bbox[1], bbox[3], bbox[0], bbox[2], area_poly)
-        # time_series[index]['values'].append(max)
-        time_series[index]['values'].append(np.random.randint(300))
+        max = getMaxConc(file, url, bbox[1], bbox[3], bbox[0], bbox[2], area_poly)
+        # max = np.random.randint(300)
+        if max == "NaN":
+            max = 0
+        time_series[index]['values'].append(int(max))
 
         if any((d['datetime'] == date) and (
                 (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
                max_measures):
+            _index = [i for i, _ in enumerate(max_measures) if
+                      ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
+                          area['properties']['DENOMINAZI'].replace(" ", "")))][0]
+
             time_series[index]['datetime_measures'].append(reference_hour)
-            time_series[index]['measures'].append(np.random.randint(300))
+            time_series[index]['measures'].append(int(max_measures[_index]['outcome']))
+
+file.close()
 
 for time in time_series:
+    directory_name = "graphics/" + (time["name"]).replace("/", "")
+    Path(directory_name).mkdir(parents=True, exist_ok=True)
+
     hours = []
     measures = []
 
@@ -70,7 +85,7 @@ for time in time_series:
             hours.append(t)
         else:
             x = np.array(hours)
-            y = np.array(time['values'][(t.month-1)*len(x):t.month*len(x)])
+            y = np.array(time['values'][(t.month - 1) * len(x):t.month * len(x)])
 
             count = 0
             for m in time['datetime_measures']:
@@ -79,11 +94,12 @@ for time in time_series:
                     count += 1
 
             x1 = np.array(measures)
-            y1 = np.array(time['measures'][temp_count:temp_count+count])
+            y1 = np.array(time['measures'][temp_count:temp_count + count])
 
             temp_count += count
 
             fig = plt.figure()
+            fig.set_size_inches(10, 5.0)
             fig.suptitle(time['name'] + ": " + calendar.month_name[int(temp_month)] + " " + str(year), fontsize=20)
 
             ax = fig.add_subplot()
@@ -107,9 +123,10 @@ for time in time_series:
                 for k in x1:
                     plt.fill_between(x, 0, y, color='green', where=(x < k) & (x > k - datetime.timedelta(hours=168)))
 
+            fig.savefig(directory_name + "/" + str(calendar.month_name[int(temp_month)]) + "-" + str(year) + ".png",
+                        dpi=100)
+
             hours.clear()
             measures.clear()
 
             temp_month = int(t.month)
-
-            plt.show()

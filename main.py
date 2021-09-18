@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import json
 import netCDF4
@@ -41,7 +42,7 @@ def remove_measures_duplicates():
                                      'outcome': outcome, 'year': year})
             else:
                 index = [i for i, _ in enumerate(max_measures) if _['id'] == id][0]
-                if outcome > max_measures[index]['outcome']:
+                if int(outcome) > int(max_measures[index]['outcome']):
                     max_measures[index]['outcome'] = outcome
                     max_measures[index]['datetime'] = date
                     max_measures[index]['latitude'] = lat
@@ -82,7 +83,7 @@ def getMaxConc(f, url, min_lat, max_lat, min_long, max_long, area_poly):
                                                                                           min_long, max_long)
 
         concentration = dataset.variables['conc'][0]
-        max = float("-inf")
+        max = np.float32("-inf")
         for k in range(0, 2):
             for i in range(index_min_lat, index_max_lat + 1):
                 for j in range(index_min_long, index_max_long + 1):
@@ -113,13 +114,15 @@ def worker(areas, my_dataset, measure, file):
 
     area_poly = Polygon(coordinates)
 
+    id = measure["id"]
+
     date = measure['datetime']
 
     sample = measure['outcome']
 
     year = measure['year']
 
-    _dataset = {"features": [], "label": sample, "site": measure['site_name'], 'year': year}
+    _dataset = {"features": [], "label": sample, "id": id, "site": measure['site_name'], 'year': year}
     features = []
 
     print(measure)
@@ -139,6 +142,12 @@ def worker(areas, my_dataset, measure, file):
         features.append(str(max))
 
     _dataset["features"] = features
+
+    print(_dataset)
+    _file = open("temp_dataset.txt", "a")
+    _file.write(_dataset)
+    _file.flush()
+    _file.close()
 
     my_dataset.append(_dataset)
 
