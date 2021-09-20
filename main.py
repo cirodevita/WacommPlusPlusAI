@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import pandas as pd
 import json
 import netCDF4
@@ -7,7 +8,6 @@ from configparser import ConfigParser
 from shapely.geometry import Point, Polygon
 import multiprocessing
 from multiprocessing.pool import ThreadPool as Pool
-
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -60,8 +60,8 @@ def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
     N = len(lat)
     sum_delta_lat = 0
     for i in range(1, N):
-        sum_delta_lat += lat[i] - lat[i-1]
-    delta_lat = sum_delta_lat/N
+        sum_delta_lat += lat[i] - lat[i - 1]
+    delta_lat = sum_delta_lat / N
 
     M = len(long)
     sum_delta_long = 0
@@ -69,34 +69,34 @@ def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
         sum_delta_long += long[i] - long[i - 1]
     delta_long = sum_delta_long / M
 
-    index_min_lat = round((min_lat - lat[0])/delta_lat)
-    index_max_lat = round((max_lat - lat[0])/delta_lat)
-    index_min_long = round((min_long - long[0])/delta_long)
-    index_max_long = round((max_long - long[0])/delta_long)
+    index_min_lat = round((min_lat - lat[0]) / delta_lat)
+    index_max_lat = round((max_lat - lat[0]) / delta_lat)
+    index_min_long = round((min_long - long[0]) / delta_long)
+    index_max_long = round((max_long - long[0]) / delta_long)
 
     return index_min_lat, index_max_lat, index_min_long, index_max_long
 
 
-def getMaxConc(f, url, min_lat, max_lat, min_long, max_long, area_poly):
+def getMaxConc(f, url, lat, long, index_min_lat, index_min_long, area_poly):
     try:
+        start = time.time()
+
         dataset = netCDF4.Dataset(url)
-        long = dataset.variables['longitude']
-        lat = dataset.variables['latitude']
 
-        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
-                                                                                          min_lat, max_lat,
-                                                                                          min_long, max_long)
-
-        concentration = dataset.variables['conc'][0]
+        concentration = dataset['conc'][0]
         max = np.float32("-inf")
-        for k in range(0, 2):
-            for i in range(index_min_lat, index_max_lat + 1):
-                for j in range(index_min_long, index_max_long + 1):
-                    point = Point(long[j], lat[i])
+        for k in range(0, len(concentration)):
+            for i in range(0, len(concentration[0])):
+                for j in range(0, len(concentration[0][0])):
+                    point = Point(long[index_min_long + j], lat[index_min_lat + i])
                     if point.within(area_poly):
                         value = concentration[k][i][j]
                         if value > max:
                             max = value
+
+        end = time.time()
+
+        print(end - start)
     except:
         f.write(url + '\n')
         f.flush()
@@ -106,8 +106,9 @@ def getMaxConc(f, url, min_lat, max_lat, min_long, max_long, area_poly):
 
 
 # WORKER
-def worker(areas, my_dataset, measure, file):
-    index = [i for i, _ in enumerate(areas) if (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
+def worker(areas, my_dataset, measure, file, lat, long):
+    index = [i for i, _ in enumerate(areas) if
+             (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
 
     bbox = areas[index]['bbox']
     min_long = bbox[0]
@@ -140,11 +141,17 @@ def worker(areas, my_dataset, measure, file):
         month = '{:>02d}'.format(reference_hour.month)
         day = '{:>02d}'.format(reference_hour.day)
 
-        url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + ".nc"
+        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                          min_lat, max_lat,
+                                                                                          min_long, max_long)
 
-        max = getMaxConc(file, url, min_lat, max_lat, min_long, max_long, area_poly)
+        url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + \
+              ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
+              str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        print(id, measure['site_name'], max, formatted_hour)
+        max = getMaxConc(file, url, lat, long, index_min_lat, index_min_long, area_poly)
+
+        print(id, measure['site_name'], max, reference_hour)
 
         features.append(str(max))
 
@@ -159,7 +166,7 @@ def worker(areas, my_dataset, measure, file):
 
 
 # CREATE DATASET
-def create_dataset(areas, max_measures):
+def create_dataset(areas, max_measures, lat, long):
     my_dataset = []
     file = open("test/url_mancanti.txt", "a")
 
@@ -168,8 +175,10 @@ def create_dataset(areas, max_measures):
 
     print("THREADS: ", pool_size)
 
+    print(pool_size)
+
     for measure in max_measures:
-        pool.apply_async(worker, (areas, my_dataset, measure, file,))
+        pool.apply_async(worker, (areas, my_dataset, measure, file, lat, long,))
 
     pool.close()
     pool.join()
@@ -182,7 +191,12 @@ if __name__ == "__main__":
     areas = load_areas()
     max_measures = remove_measures_duplicates()
 
-    dataset = create_dataset(areas, max_measures)
+    url = "http://193.205.230.6:8080/opendap/opendap/wcm3/d03/archive/2020/01/01/wcm3_d03_20200101Z0000.nc"
+    _dataset = netCDF4.Dataset(url)
+    long = _dataset.variables['longitude']
+    lat = _dataset.variables['latitude']
+
+    dataset = create_dataset(areas, max_measures, lat, long)
 
     with open('dataset.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
