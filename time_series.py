@@ -1,19 +1,19 @@
 import matplotlib.pyplot as plt
 import datetime
+import netCDF4
 import numpy as np
 from configparser import ConfigParser
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 import calendar
 from pathlib import Path
 
-from main import load_areas, getMaxConc, remove_measures_duplicates
+from main import load_areas, remove_measures_duplicates, get_index_lat_long
 
 cfg = ConfigParser()
 cfg.read('config.ini')
 
 areas = load_areas()
 max_measures = remove_measures_duplicates()
-
 
 time_series = []
 for area in areas:
@@ -28,6 +28,19 @@ _hours = 8760
 
 file = open("test/url_mancanti.txt", "a")
 
+
+def measure(index, date, area):
+    if any((d['datetime'] == date) and (
+            (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
+           max_measures):
+        _index = [i for i, _ in enumerate(max_measures) if
+                  ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
+                      area['properties']['DENOMINAZI'].replace(" ", "")))][0]
+
+        time_series[index]['datetime_measures'].append(reference_hour)
+        time_series[index]['measures'].append(int(max_measures[_index]['outcome']))
+
+
 for i in range(0, _hours + 1):
     reference_hour = datetime.datetime(_year, _month, _day, 0, 0) + datetime.timedelta(hours=i)
     formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
@@ -41,31 +54,56 @@ for i in range(0, _hours + 1):
 
     date = day + "/" + month + "/" + year[2:4] + "/" + hour + ":00"
 
-    for area in areas:
-        bbox = area['bbox']
+    try:
+        dataset = netCDF4.Dataset(url)
+        long = dataset.variables['longitude']
+        lat = dataset.variables['latitude']
 
-        coordinates = area['geometry']['coordinates'][0][0]
-        area_poly = Polygon(coordinates)
+        concentration = dataset.variables['conc'][0]
 
-        index = [i for i, _ in enumerate(time_series) if
-                 (_['name']).replace(" ", "") == (area['properties']['DENOMINAZI']).replace(" ", "")][0]
+        for area in areas:
+            bbox = area['bbox']
 
-        time_series[index]['datetime'].append(reference_hour)
-        max = getMaxConc(file, url, bbox[1], bbox[3], bbox[0], bbox[2], area_poly)
-        # max = np.random.randint(300)
-        if max == "NaN":
-            max = 0
-        time_series[index]['values'].append(int(max))
+            coordinates = area['geometry']['coordinates'][0][0]
+            area_poly = Polygon(coordinates)
 
-        if any((d['datetime'] == date) and (
-                (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
-               max_measures):
-            _index = [i for i, _ in enumerate(max_measures) if
-                      ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
-                          area['properties']['DENOMINAZI'].replace(" ", "")))][0]
+            index = [i for i, _ in enumerate(time_series) if
+                     (_['name']).replace(" ", "") == (area['properties']['DENOMINAZI']).replace(" ", "")][0]
 
-            time_series[index]['datetime_measures'].append(reference_hour)
-            time_series[index]['measures'].append(int(max_measures[_index]['outcome']))
+            time_series[index]['datetime'].append(reference_hour)
+
+            index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                              bbox[1], bbox[3],
+                                                                                              bbox[0], bbox[2])
+            max = np.float32("-inf")
+            for k in range(0, 2):
+                for i in range(index_min_lat, index_max_lat + 1):
+                    for j in range(index_min_long, index_max_long + 1):
+                        point = Point(long[j], lat[i])
+                        if point.within(area_poly):
+                            value = concentration[k][i][j]
+                            if value > max:
+                                max = value
+
+            # max = np.random.randint(300)
+            if max == "NaN":
+                max = 0
+            time_series[index]['values'].append(int(max))
+
+            measure(index, date, area)
+
+            print(area['properties']['DENOMINAZI'], reference_hour)
+    except:
+        for area in areas:
+            index = [i for i, _ in enumerate(time_series) if
+                     (_['name']).replace(" ", "") == (area['properties']['DENOMINAZI']).replace(" ", "")][0]
+
+            time_series[index]['datetime'].append(reference_hour)
+            time_series[index]['values'].append(0)
+
+            measure(index, date, area)
+
+            print(area['properties']['DENOMINAZI'], reference_hour)
 
 file.close()
 
