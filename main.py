@@ -25,10 +25,12 @@ def load_areas():
 # REMOVE MEASURES DUPLICATES
 def remove_measures_duplicates():
     max_measures = []
+    list = cfg.get('variables', 'YEAR')
+    years = json.loads(list)
 
     lines = pd.read_csv(cfg.get('files', 'MEASURES'), delimiter=';')
     for line in lines.iterrows():
-        if line[1]['ANNO ACCETTAZIONE'] == cfg.getint('variables', 'YEAR'):
+        if line[1]['ANNO ACCETTAZIONE'] in years:
             id = line[1]['NUMERO SCHEDA']
             date = line[1]['DATA PRELIEVO'] + cfg.get('variables', 'SAMPLE_HOUR')
             outcome = line[1]['ESITO']
@@ -42,11 +44,14 @@ def remove_measures_duplicates():
                                      'outcome': outcome, 'year': year})
             else:
                 index = [i for i, _ in enumerate(max_measures) if _['id'] == id][0]
-                if int(outcome) > int(max_measures[index]['outcome']):
-                    max_measures[index]['outcome'] = outcome
-                    max_measures[index]['datetime'] = date
-                    max_measures[index]['latitude'] = lat
-                    max_measures[index]['longitude'] = lon
+                try:
+                    if int(outcome) > int(max_measures[index]['outcome']):
+                        max_measures[index]['outcome'] = outcome
+                        max_measures[index]['datetime'] = date
+                        max_measures[index]['latitude'] = lat
+                        max_measures[index]['longitude'] = lon
+                except:
+                    pass
 
     return max_measures
 
@@ -139,6 +144,8 @@ def worker(areas, my_dataset, measure, file):
 
         max = getMaxConc(file, url, min_lat, max_lat, min_long, max_long, area_poly)
 
+        print(id, measure['site_name'], max, formatted_hour)
+
         features.append(str(max))
 
     _dataset["features"] = features
@@ -157,7 +164,9 @@ def create_dataset(areas, max_measures):
     file = open("test/url_mancanti.txt", "a")
 
     pool_size = multiprocessing.cpu_count()
-    pool = Pool(pool_size)  
+    pool = Pool(pool_size)
+
+    print("THREADS: ", pool_size)
 
     for measure in max_measures:
         pool.apply_async(worker, (areas, my_dataset, measure, file,))
@@ -172,7 +181,9 @@ def create_dataset(areas, max_measures):
 if __name__ == "__main__":
     areas = load_areas()
     max_measures = remove_measures_duplicates()
+
     dataset = create_dataset(areas, max_measures)
 
     with open('dataset.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
+
