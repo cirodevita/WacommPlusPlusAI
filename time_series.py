@@ -75,6 +75,7 @@ for i in range(0, _hours + 1):
             index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
                                                                                               bbox[1], bbox[3],
                                                                                               bbox[0], bbox[2])
+
             max = np.float32("-inf")
             for k in range(0, 2):
                 for i in range(index_min_lat, index_max_lat + 1):
@@ -85,7 +86,6 @@ for i in range(0, _hours + 1):
                             if value > max:
                                 max = value
 
-            # max = np.random.randint(300)
             if max == "NaN":
                 max = 0
             time_series[index]['values'].append(int(max))
@@ -116,6 +116,7 @@ for time in time_series:
 
     temp_month = 1
     temp_count = 0
+    index_start = 0
 
     for t in time['datetime']:
         if temp_month == int(t.month):
@@ -123,7 +124,8 @@ for time in time_series:
             hours.append(t)
         else:
             x = np.array(hours)
-            y = np.array(time['values'][(t.month - 1) * len(x):t.month * len(x)])
+            index_end = index_start + len(x)
+            y = np.array(time['values'][index_start:index_end])
 
             count = 0
             for m in time['datetime_measures']:
@@ -168,3 +170,4 @@ for time in time_series:
             measures.clear()
 
             temp_month = int(t.month)
+            index_start += len(x) + 1
