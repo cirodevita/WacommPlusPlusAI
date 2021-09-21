@@ -1,7 +1,6 @@
 import concurrent.futures
 from functools import partial
 import multiprocessing
-from glob import glob
 import numpy as np
 import time
 import pandas as pd
@@ -58,17 +57,17 @@ def remove_measures_duplicates():
     return max_measures
 
 
-def get_index_lat_long(min_lat, max_lat, min_long, max_long):
-    index_min_lat = round((min_lat - glob.lat[0]) / glob.delta_lat)
-    index_max_lat = round((max_lat - glob.lat[0]) / glob.delta_lat)
-    index_min_long = round((min_long - glob.long[0]) / glob.delta_long)
-    index_max_long = round((max_long - glob.long[0]) / glob.delta_long)
+def get_index_lat_long(lat, long, delta_lat, delta_long, min_lat, max_lat, min_long, max_long):
+    index_min_lat = round((min_lat - lat[0]) / delta_lat)
+    index_max_lat = round((max_lat - lat[0]) / delta_lat)
+    index_min_long = round((min_long - long[0]) / delta_long)
+    index_max_long = round((max_long - long[0]) / delta_long)
 
     return index_min_lat, index_max_lat, index_min_long, index_max_long
 
 
 # MAX CONCENTRATION IN AN AREA IN A SPECIFIC HOUR
-def getMaxConc(url, index_min_lat, index_min_long, area_poly):
+def getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly):
     try:
         dataset = netCDF4.Dataset(url)
 
@@ -77,7 +76,7 @@ def getMaxConc(url, index_min_lat, index_min_long, area_poly):
         for k in range(0, len(concentration)):
             for i in range(0, len(concentration[0])):
                 for j in range(0, len(concentration[0][0])):
-                    point = Point(glob.long[index_min_long + j], glob.lat[index_min_lat + i])
+                    point = Point(long[index_min_long + j], lat[index_min_lat + i])
                     if point.within(area_poly):
                         value = concentration[k][i][j]
                         if value > max:
@@ -94,7 +93,7 @@ def getMaxConc(url, index_min_lat, index_min_long, area_poly):
 
 
 # WORKER
-def worker(areas, measure):
+def worker(areas, lat, long, delta_lat, delta_long, measure):
     index = [i for i, _ in enumerate(areas) if
              (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
 
@@ -129,14 +128,16 @@ def worker(areas, measure):
         month = '{:>02d}'.format(reference_hour.month)
         day = '{:>02d}'.format(reference_hour.day)
 
-        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(min_lat, max_lat,
+        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                          delta_lat, delta_long,
+                                                                                          min_lat, max_lat,
                                                                                           min_long, max_long)
 
         url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + \
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        max = getMaxConc(url, index_min_lat, index_min_long, area_poly)
+        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
         # max = np.random.randint(150)
         # max = 10
 
@@ -152,12 +153,12 @@ def worker(areas, measure):
 
 
 # CREATE DATASET
-def create_dataset(areas, max_measures):
+def create_dataset(areas, lat, long, delta_lat, delta_long, max_measures):
     my_dataset = []
 
     workers = multiprocessing.cpu_count()
-    func = partial(worker, areas)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+    func = partial(worker, areas, lat, long, delta_lat, delta_long)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
         for result in executor.map(func, max_measures):
             my_dataset.append(result)
 
@@ -189,18 +190,15 @@ def get_lat_long():
         sum_delta_long += long[i] - long[i - 1]
     delta_long = sum_delta_long / M
 
-    glob.lat = np.array(lat)
-    glob.long = np.array(long)
-    glob.delta_lat = delta_lat
-    glob.delta_long = delta_long
+    return np.array(lat), np.array(long), delta_lat, delta_long
 
 
 if __name__ == "__main__":
     start = time.time()
     areas = load_areas()
     max_measures = remove_measures_duplicates()
-    get_lat_long()
-    dataset = create_dataset(areas, max_measures)
+    lat, long, delta_lat, delta_long = get_lat_long()
+    dataset = create_dataset(areas, lat, long, delta_lat, delta_long, max_measures)
 
     with open('dataset.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
