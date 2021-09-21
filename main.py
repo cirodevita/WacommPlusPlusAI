@@ -1,3 +1,6 @@
+import concurrent.futures
+from functools import partial
+from glob import glob
 import numpy as np
 import time
 import pandas as pd
@@ -5,9 +8,8 @@ import json
 import netCDF4
 from datetime import datetime, timedelta
 from configparser import ConfigParser
+
 from shapely.geometry import Point, Polygon
-import multiprocessing
-from multiprocessing.pool import ThreadPool as Pool
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -77,10 +79,8 @@ def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
     return index_min_lat, index_max_lat, index_min_long, index_max_long
 
 
-def getMaxConc(f, url, lat, long, index_min_lat, index_min_long, area_poly):
+def getMaxConc(url, index_min_lat, index_min_long, area_poly):
     try:
-        start = time.time()
-
         dataset = netCDF4.Dataset(url)
 
         concentration = dataset['conc'][0]
@@ -88,25 +88,23 @@ def getMaxConc(f, url, lat, long, index_min_lat, index_min_long, area_poly):
         for k in range(0, len(concentration)):
             for i in range(0, len(concentration[0])):
                 for j in range(0, len(concentration[0][0])):
-                    point = Point(long[index_min_long + j], lat[index_min_lat + i])
+                    point = Point(glob.long[index_min_long + j], glob.lat[index_min_lat + i])
                     if point.within(area_poly):
                         value = concentration[k][i][j]
                         if value > max:
                             max = value
-
-        end = time.time()
-
-        print(end - start)
     except:
-        f.write(url + '\n')
-        f.flush()
+        file = open("test/url_mancanti.txt", "a")
+        file.write(url + '\n')
+        file.flush()
+        file.close()
         max = "NaN"
 
     return max
 
 
 # WORKER
-def worker(areas, my_dataset, measure, file, lat, long):
+def worker(areas, my_dataset, measure):
     index = [i for i, _ in enumerate(areas) if
              (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
 
@@ -141,7 +139,7 @@ def worker(areas, my_dataset, measure, file, lat, long):
         month = '{:>02d}'.format(reference_hour.month)
         day = '{:>02d}'.format(reference_hour.day)
 
-        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(glob.lat, glob.long,
                                                                                           min_lat, max_lat,
                                                                                           min_long, max_long)
 
@@ -149,7 +147,8 @@ def worker(areas, my_dataset, measure, file, lat, long):
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        max = getMaxConc(file, url, lat, long, index_min_lat, index_min_long, area_poly)
+        max = getMaxConc(url, index_min_lat, index_min_long, area_poly)
+        # max = np.random.randint(150)
 
         print(id, measure['site_name'], max, reference_hour)
 
@@ -157,47 +156,43 @@ def worker(areas, my_dataset, measure, file, lat, long):
 
     _dataset["features"] = features
 
-    print(_dataset)
-    _file = open("temp_dataset.txt", "a")
-    _file.write(_dataset)
-    _file.close()
-
     my_dataset.append(_dataset)
 
 
 # CREATE DATASET
-def create_dataset(areas, max_measures, lat, long):
+def create_dataset(areas, max_measures):
     my_dataset = []
-    file = open("test/url_mancanti.txt", "a")
 
-    pool_size = multiprocessing.cpu_count()
-    pool = Pool(pool_size)
+    func = partial(worker, areas, my_dataset)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(max_measures)) as executor:
+        executor.map(func, max_measures)
 
-    print("THREADS: ", pool_size)
-
-    print(pool_size)
-
-    for measure in max_measures:
-        pool.apply_async(worker, (areas, my_dataset, measure, file, lat, long,))
-
-    pool.close()
-    pool.join()
-    file.close()
+    print(my_dataset)
 
     return my_dataset
 
 
-if __name__ == "__main__":
-    areas = load_areas()
-    max_measures = remove_measures_duplicates()
-
+# GET LAT/LONG ARRAY ONLY ONE TIME
+def get_lat_long():
     url = "http://193.205.230.6:8080/opendap/opendap/wcm3/d03/archive/2020/01/01/wcm3_d03_20200101Z0000.nc"
     _dataset = netCDF4.Dataset(url)
     long = _dataset.variables['longitude']
     lat = _dataset.variables['latitude']
 
-    dataset = create_dataset(areas, max_measures, lat, long)
+    glob.lat = np.array(lat)
+    glob.long = np.array(long)
+
+
+if __name__ == "__main__":
+    start = time.time()
+    areas = load_areas()
+    max_measures = remove_measures_duplicates()
+    get_lat_long()
+    dataset = create_dataset(areas, max_measures)
 
     with open('dataset.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
 
+    end = time.time()
+
+    print(end-start)
