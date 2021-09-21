@@ -7,7 +7,7 @@ from shapely.geometry import Polygon, Point
 import calendar
 from pathlib import Path
 
-from main import load_areas, remove_measures_duplicates, get_index_lat_long
+from main import load_areas, remove_measures_duplicates
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -27,6 +27,27 @@ _day = 1
 _hours = 8760
 
 file = open("test/url_mancanti.txt", "a")
+
+
+def get_index_lat_long(lat, long, min_lat, max_lat, min_long, max_long):
+    N = len(lat)
+    sum_delta_lat = 0
+    for i in range(1, N):
+        sum_delta_lat += lat[i] - lat[i - 1]
+    delta_lat = sum_delta_lat / N
+
+    M = len(long)
+    sum_delta_long = 0
+    for i in range(1, M):
+        sum_delta_long += long[i] - long[i - 1]
+    delta_long = sum_delta_long / M
+
+    index_min_lat = round((min_lat - lat[0]) / delta_lat)
+    index_max_lat = round((max_lat - lat[0]) / delta_lat)
+    index_min_long = round((min_long - long[0]) / delta_long)
+    index_max_long = round((max_long - long[0]) / delta_long)
+
+    return index_min_lat, index_max_lat, index_min_long, index_max_long
 
 
 def measure(index, date, area):
