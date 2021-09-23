@@ -1,13 +1,8 @@
-import concurrent.futures
-import multiprocessing
 import time
 import calendar
 from configparser import ConfigParser
 from datetime import datetime, timedelta
-from functools import partial
 from pathlib import Path
-
-import netCDF4
 import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import Polygon
@@ -65,14 +60,16 @@ def worker(year, areas, lat, long, delta_lat, delta_long, max_measures, time_ser
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        # max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        max = np.random.randint(300)
+        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        # max = np.random.randint(300)
 
         if max == "NaN":
             max = 0
         time_series[index]['values'].append(int(max))
 
         measure(index, date, reference_hour, area, max_measures)
+
+        print(area['properties']['DENOMINAZI'], reference_hour)
 
 
 def create_timeseries(year, areas, lat, long, delta_lat, delta_long, max_measures, time_series, hours):
