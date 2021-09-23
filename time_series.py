@@ -1,7 +1,10 @@
+import concurrent.futures
+import multiprocessing
 import time
 import calendar
 from configparser import ConfigParser
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
@@ -13,74 +16,81 @@ cfg = ConfigParser()
 cfg.read('config.ini')
 
 
-def measure(index, date, reference_hour, area, max_measures):
-    if any((d['datetime'] == date) and (
-            (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
-           max_measures):
-        _index = [i for i, _ in enumerate(max_measures) if
-                  ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
-                      area['properties']['DENOMINAZI'].replace(" ", "")))][0]
+def worker(year, month, hours, lat, long, delta_lat, delta_long, max_measures, area):
+    bbox = area['bbox']
+    min_long = bbox[0]
+    min_lat = bbox[1]
+    max_long = bbox[2]
+    max_lat = bbox[3]
 
-        time_series[index]['datetime_measures'].append(reference_hour)
-        time_series[index]['measures'].append(int(max_measures[_index]['outcome']))
+    coordinates = area['geometry']['coordinates'][0][0]
+    area_poly = Polygon(coordinates)
 
+    index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                      delta_lat, delta_long,
+                                                                                      min_lat, max_lat,
+                                                                                      min_long, max_long)
 
-def worker(year, areas, lat, long, delta_lat, delta_long, max_measures, time_series, i):
-    reference_hour = datetime(year, 1, 1, 0, 0) + timedelta(hours=i)
-    formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
+    temp_time_series = {"name": area['properties']['DENOMINAZI'], "datetime": [], "values": [],
+                        "datetime_measures": [], "measures": []}
 
-    _year = str(reference_hour.year)
-    _month = f'{reference_hour.month:02}'
-    _day = f'{reference_hour.day:02}'
-    _hour = f'{reference_hour.hour:02}'
+    print(temp_time_series)
 
-    date = _day + "/" + _month + "/" + _year[2:4] + "/" + _hour + ":00"
+    for i in range(0, hours + 1):
+        reference_hour = datetime(year, month, 1, 0, 0) + timedelta(hours=i)
+        formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
 
-    for area in areas:
-        bbox = area['bbox']
-        min_long = bbox[0]
-        min_lat = bbox[1]
-        max_long = bbox[2]
-        max_lat = bbox[3]
+        temp_time_series['datetime'].append(reference_hour)
 
-        coordinates = area['geometry']['coordinates'][0][0]
-        area_poly = Polygon(coordinates)
+        _year = str(reference_hour.year)
+        _month = f'{reference_hour.month:02}'
+        _day = f'{reference_hour.day:02}'
+        _hour = f'{reference_hour.hour:02}'
 
-        index = [i for i, _ in enumerate(time_series) if
-                 (_['name']).replace(" ", "") == (area['properties']['DENOMINAZI']).replace(" ", "")][0]
-
-        time_series[index]['datetime'].append(reference_hour)
-
-        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
-                                                                                          delta_lat, delta_long,
-                                                                                          min_lat, max_lat,
-                                                                                          min_long, max_long)
+        date = _day + "/" + _month + "/" + _year[2:4] + "/" + _hour + ":00"
 
         url = cfg.get('variables', 'URL') + _year + "/" + _month + "/" + _day + "/wcm3_d03_" + formatted_hour + \
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        # max = np.random.randint(300)
-
+        # max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        max = np.random.randint(300)
         if max == "NaN":
             max = 0
-        time_series[index]['values'].append(int(max))
+        temp_time_series['values'].append(int(max))
 
-        measure(index, date, reference_hour, area, max_measures)
+        if any((d['datetime'] == date) and (
+                (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
+               max_measures):
+            _index = [i for i, _ in enumerate(max_measures) if
+                      ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
+                          area['properties']['DENOMINAZI'].replace(" ", "")))][0]
 
-        print(area['properties']['DENOMINAZI'], reference_hour)
+            temp_time_series['datetime_measures'].append(reference_hour)
+            try:
+                temp_time_series['measures'].append(int(max_measures[_index]['outcome']))
+            except:
+                temp_time_series['measures'].append(100)
+
+    return temp_time_series
 
 
-def create_timeseries(year, areas, lat, long, delta_lat, delta_long, max_measures, time_series, hours):
-    """
+def create_timeseries(lat, long, delta_lat, delta_long, max_measures, areas):
+    year = cfg.getint('time_series', 'YEAR')
+    month = cfg.getint('time_series', 'MONTH')
+    dt = datetime(year, month, 1, 00, 00, 00)
+    dt2 = datetime(year + 1, month, 1, 00, 00, 00)
+    hours = (dt2 - dt).days * 24
+
+    time_series = []
+
     workers = multiprocessing.cpu_count()
-    func = partial(worker, year, areas, lat, long, delta_lat, delta_long, max_measures, time_series)
+    func = partial(worker, year, month, hours, lat, long, delta_lat, delta_long, max_measures)
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
-        [executor.submit(func, i) for i in range(0, hours)]
-    """
-    for i in range(0, hours + 1):
-        worker(year, areas, lat, long, delta_lat, delta_long, max_measures, time_series, i)
+        for result in executor.map(func, areas):
+            time_series.append(result)
+
+    return time_series
 
 
 def create_graphics(time_series):
@@ -91,7 +101,7 @@ def create_graphics(time_series):
         hours = []
         measures = []
 
-        temp_month = 1
+        temp_month = cfg.getint('time_series', 'MONTH')
         temp_count = 0
         index_start = 0
 
@@ -117,7 +127,8 @@ def create_graphics(time_series):
 
                 fig = plt.figure()
                 fig.set_size_inches(10, 5.0)
-                fig.suptitle(time['name'] + ": " + calendar.month_name[int(temp_month)] + " " + str(year), fontsize=20)
+                # fig.suptitle(time['name'] + ": " + calendar.month_name[int(temp_month)] + " " + str(year), fontsize=20)
+                fig.suptitle(time['name'] + ": " + calendar.month_name[int(temp_month)], fontsize=20)
 
                 ax = fig.add_subplot()
                 ax.plot(x, y, linewidth=0.2, color='black')
@@ -157,19 +168,9 @@ if __name__ == "__main__":
     areas = load_areas()
     max_measures = remove_measures_duplicates()
 
-    time_series = []
-    for area in areas:
-        time_series.append({"name": area['properties']['DENOMINAZI'], "datetime": [], "values": [],
-                            "datetime_measures": [], "measures": []})
-
     lat, long, delta_lat, delta_long = get_lat_long()
 
-    year = cfg.getint('time_series', 'YEAR')
-    dt = datetime(year, 1, 1, 00, 00, 00)
-    # dt2 = datetime(year + 1, 1, 1, 00, 00, 00)
-    dt2 = datetime(year, 2, 1, 00, 00, 00)
-    hours = (dt2 - dt).days * 24
-    create_timeseries(year, areas, lat, long, delta_lat, delta_long, max_measures, time_series, hours)
+    time_series = create_timeseries(lat, long, delta_lat, delta_long, max_measures, areas)
 
     create_graphics(time_series)
 
