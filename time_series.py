@@ -53,8 +53,8 @@ def worker(year, month, hours, lat, long, delta_lat, delta_long, max_measures, a
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        # max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        max = np.random.randint(300)
+        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        # max = np.random.randint(300)
         if max == "NaN":
             max = 0
         temp_time_series['values'].append(int(max))
@@ -70,7 +70,7 @@ def worker(year, month, hours, lat, long, delta_lat, delta_long, max_measures, a
             try:
                 temp_time_series['measures'].append(int(max_measures[_index]['outcome']))
             except:
-                temp_time_series['measures'].append(100)
+                temp_time_series['measures'].append(0)
 
     return temp_time_series
 
