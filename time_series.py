@@ -40,7 +40,7 @@ def worker(year, month, hours, lat, long, delta_lat, delta_long, max_measures, a
         reference_hour = datetime(year, month, 1, 0, 0) + timedelta(hours=i)
         formatted_hour = reference_hour.strftime("%Y%m%dZ%H%M")
 
-        print(area, reference_hour)
+        print(area['properties']['DENOMINAZI'], reference_hour)
 
         temp_time_series['datetime'].append(reference_hour)
 
