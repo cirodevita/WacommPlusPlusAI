@@ -55,8 +55,8 @@ def worker(year, month, day, hours, lat, long, delta_lat, delta_long, max_measur
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        # value = np.random.randint(300)
+        # value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        value = np.random.randint(300)
         if value == "NaN":
             value = 0
         temp_time_series['values'].append(round(float(value), 2))
@@ -101,7 +101,7 @@ def create_timeseries(lat, long, delta_lat, delta_long, max_measures, areas):
 
 def create_graphics(time_series):
     for time in time_series:
-        directory_name = "graphics/" + (time["name"]).replace("/", "")
+        directory_name = "graphics/" + cfg.get('variables', 'TYPE') + "_" + (time["name"]).replace("/", "")
         Path(directory_name).mkdir(parents=True, exist_ok=True)
 
         hours = []
