@@ -55,8 +55,8 @@ def worker(year, month, day, hours, lat, long, delta_lat, delta_long, max_measur
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        # value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        value = np.random.randint(300)
+        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        # value = np.random.randint(300)
         if value == "NaN":
             value = 0
         temp_time_series['values'].append(round(float(value), 2))
