@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import Polygon
 
-from main import load_areas, remove_measures_duplicates, get_lat_long, get_index_lat_long, getMaxConc
+from main import load_areas, remove_measures_duplicates, get_lat_long, get_index_lat_long, getConc
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -55,11 +55,11 @@ def worker(year, month, hours, lat, long, delta_lat, delta_long, max_measures, a
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
         # max = np.random.randint(300)
-        if max == "NaN":
-            max = 0
-        temp_time_series['values'].append(int(max))
+        if value == "NaN":
+            value = 0
+        temp_time_series['values'].append(round(float(value), 2))
 
         if any((d['datetime'] == date) and (
                 (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in

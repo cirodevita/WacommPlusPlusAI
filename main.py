@@ -4,6 +4,7 @@ import multiprocessing
 import numpy as np
 import time
 import pandas as pd
+import statistics
 import json
 import netCDF4
 from datetime import datetime, timedelta
@@ -25,7 +26,7 @@ def load_areas():
 
 # REMOVE MEASURES DUPLICATES
 def remove_measures_duplicates():
-    max_measures = []
+    measures = []
     list = cfg.get('variables', 'YEAR')
     years = json.loads(list)
 
@@ -34,27 +35,34 @@ def remove_measures_duplicates():
         if line[1]['ANNO ACCETTAZIONE'] in years:
             id = line[1]['NUMERO SCHEDA']
             date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
-            outcome = line[1]['ESITO']
+            try:
+                outcome = int(line[1]['ESITO'])
+            except:
+                outcome = line[1]['ESITO']
             site = line[1]['SITO']
             lat = line[1]['LATITUDINE_DEF']
             lon = line[1]['LONGITUDINE_DEF']
             year = line[1]['ANNO ACCETTAZIONE']
 
-            if not any(d['id'] == id for d in max_measures):
-                max_measures.append({"id": id, 'site_name': site, 'datetime': date, 'latitude': lat, 'longitude': lon,
-                                     'outcome': outcome, 'year': year})
+            if not any(d['id'] == id for d in measures):
+                measures.append({"id": id, 'site_name': site, 'datetime': date, 'latitude': lat, 'longitude': lon,
+                                     'outcome': [outcome], 'year': year})
             else:
-                index = [i for i, _ in enumerate(max_measures) if _['id'] == id][0]
-                try:
-                    if int(outcome) > int(max_measures[index]['outcome']):
-                        max_measures[index]['outcome'] = outcome
-                        max_measures[index]['datetime'] = date
-                        max_measures[index]['latitude'] = lat
-                        max_measures[index]['longitude'] = lon
-                except:
-                    pass
+                index = [i for i, _ in enumerate(measures) if _['id'] == id][0]
+                measures[index]['outcome'].append(outcome)
 
-    return max_measures
+    for measure in measures:
+        try:
+            if cfg.get('variables', 'TYPE') == "MEAN":
+                measure['outcome'] = round(statistics.mean(measure['outcome']), 2)
+            elif cfg.get('variables', 'TYPE') == "MAX":
+                measure['outcome'] = max(measure['outcome'])
+            else:
+                measure['outcome'] = max(measure['outcome'])
+        except:
+            measure['outcome'] = measure['outcome'][0]
+
+    return measures
 
 
 def get_index_lat_long(lat, long, delta_lat, delta_long, min_lat, max_lat, min_long, max_long):
@@ -67,29 +75,39 @@ def get_index_lat_long(lat, long, delta_lat, delta_long, min_lat, max_lat, min_l
 
 
 # MAX CONCENTRATION IN AN AREA IN A SPECIFIC HOUR
-def getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly):
+def getConc(url, lat, long, index_min_lat, index_min_long, area_poly):
     try:
         dataset = netCDF4.Dataset(url)
 
-        concentration = dataset['conc'][0]
-        max = np.float32("-inf")
-        for k in range(0, len(concentration)):
-            for i in range(0, len(concentration[0])):
-                for j in range(0, len(concentration[0][0])):
-                    point = Point(long[index_min_long + j], lat[index_min_lat + i])
-                    if point.within(area_poly):
-                        value = concentration[k][i][j]
-                        if value > max:
-                            max = value
+        concentration = dataset['conc'][0][0]
+
+        if cfg.get('variables', 'TYPE') == "MEAN":
+            value = 0
+            n = 0
+        elif cfg.get('variables', 'TYPE') == "MAX":
+            value = np.float32("-inf")
+        else:
+            value = np.float32("-inf")
+
+        for i in range(0, len(concentration)):
+            for j in range(0, len(concentration[0])):
+                point = Point(long[index_min_long + j], lat[index_min_lat + i])
+                if point.within(area_poly):
+                    current_value = concentration[i][j]
+                    if cfg.get('variables', 'TYPE') == "MEAN":
+                        value += current_value
+                        n += 1
+                    elif cfg.get('variables', 'TYPE') == "MAX":
+                        value = max(current_value, value)
+                    else:
+                        value = max(current_value, value)
+        if cfg.get('variables', 'TYPE') == "MEAN":
+            value = round(value / n, 2)
     except Exception as e:
         print(e)
-        file = open("test/url_mancanti.txt", "a")
-        file.write(url + '\n')
-        file.flush()
-        file.close()
-        max = "NaN"
+        value = "NaN"
 
-    return max
+    return value
 
 
 # WORKER
@@ -137,13 +155,13 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        max = getMaxConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
         # max = np.random.randint(150)
         # max = 10
 
-        print(id, measure['site_name'], max, reference_hour)
+        print(id, measure['site_name'], value, reference_hour)
 
-        features.append(str(max))
+        features.append(str(value))
 
     _dataset["features"] = features
 
@@ -161,12 +179,6 @@ def create_dataset(areas, lat, long, delta_lat, delta_long, max_measures):
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
         for result in executor.map(func, max_measures):
             my_dataset.append(result)
-
-    """
-    for measure in max_measures:
-        worker(areas, measure)
-    """
-    # print(my_dataset)
 
     return my_dataset
 
@@ -197,6 +209,7 @@ if __name__ == "__main__":
     start = time.time()
     areas = load_areas()
     max_measures = remove_measures_duplicates()
+
     lat, long, delta_lat, delta_long = get_lat_long()
     dataset = create_dataset(areas, lat, long, delta_lat, delta_long, max_measures)
 
