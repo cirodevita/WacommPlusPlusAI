@@ -3,3 +3,5 @@ netCDF4
 Shapely
 numpy
 matplotlib
+tensorflow
+scikit-learn
