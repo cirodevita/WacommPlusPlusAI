@@ -61,13 +61,9 @@ def worker(year, month, day, hours, lat, long, delta_lat, delta_long, max_measur
             value = 0
         temp_time_series['values'].append(round(float(value), 2))
 
-        if any((d['datetime'] == date) and (
-                (d['site_name'].replace(" ", "")) == (area['properties']['DENOMINAZI'].replace(" ", ""))) for d in
-               max_measures):
-            _index = [i for i, _ in enumerate(max_measures) if
-                      ((_['datetime']) == date) and ((_['site_name'].replace(" ", "")) == (
-                          area['properties']['DENOMINAZI'].replace(" ", "")))][0]
-
+        if any((d['datetime'] == date) and (d['code'] == area['properties']['CODICE']) for d in max_measures):
+            _index = [i for i, _ in enumerate(max_measures) if (_['datetime'] == date)
+                      and (_['code'] == area['properties']['CODICE'])][0]
             temp_time_series['datetime_measures'].append(reference_hour)
             try:
                 temp_time_series['measures'].append(int(max_measures[_index]['outcome']))

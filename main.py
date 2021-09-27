@@ -40,8 +40,8 @@ def remove_measures_duplicates():
                     outcome = 10.0
             except:
                 outcome = line[1]['outcome']
-            year = line[1]['year']
-            code = line[1]['code']
+            year = str(line[1]['year'])
+            code = str(line[1]['code'])
 
             id = str(code) + "_" + date
 
@@ -155,8 +155,8 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        # value = np.random.randint(150)
+        # value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        value = np.random.randint(150)
 
         print(id, value, reference_hour)
 
