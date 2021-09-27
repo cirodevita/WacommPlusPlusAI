@@ -1,11 +1,17 @@
 import json
+
 import pandas as pd
+from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow import keras
 
 f = open('dataset/dataset_mean_2019.json')
 data = json.load(f)
 f.close()
 
+"""
 lines = pd.read_csv("files/analisi.csv", delimiter=';')
 
 features = []
@@ -17,17 +23,59 @@ for d in data:
         if d['id'] == line[1]['NUMERO SCHEDA'] and (line[1]['DA CONSIDERARE']).upper() == "SI":
             if "NaN" not in d['features']:
                 features.append(d['features'])
-                labels.append(d['label'])
+                labels.append(float(d['label']))
                 id.append(d['id'])
+
+for index, item in enumerate(features):
+    for i, _item in enumerate(item):
+        item[index] = float(_item)
 
 x = pd.DataFrame(features)
 x.columns = ["Feature " + str(i) for i in range(0, len(x.columns))]
 y = pd.DataFrame(labels)
 y.columns = ["Label"]
+"""
 
-print(x)
+"""
+df = pd.read_csv("files/housing.csv")
+df.dropna(inplace=True)
+df = df.drop('ocean_proximity', axis=1)
 
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.05)
+x = df.drop('median_house_value', axis=1)
+y = df['median_house_value']
+
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+
+scaler = MinMaxScaler()
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
+
+model = keras.Sequential([
+    keras.layers.Input(shape=(8,)),
+    keras.layers.Dense(64, activation=tf.nn.relu),
+    keras.layers.Dense(64, activation=tf.nn.relu),
+    keras.layers.Dense(1)
+  ], name="MLP_model")
+
+optimizer = tf.keras.optimizers.RMSprop(0.001)
+
+model.compile(loss='mse', optimizer=optimizer, metrics=['mae'])
+model.summary()
+
+model.fit(x_train, y_train, epochs=400, validation_split=0.2, verbose=1)
+y_prediction = model.predict(x_test)
+print(y_prediction)
+print(y_test)
+score = r2_score(y_test, y_prediction)
+print('r2 socre is ', score)
+"""
+
+"""
+x_train = x_train.astype('float32')
+x_test = x_test.astype('float32')
+y_train = y_train.astype('float32')
+y_test = y_test.astype('float32')
+"""
 
 """
 from datetime import datetime, timedelta
@@ -66,26 +114,6 @@ from main import cfg
 # df.to_csv('dataset/dataset_mean_2019.csv', index=False)
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.05)
-
-main_input = Input(shape=(168,), name='main_input')
-emb = Embedding(256*8, output_dim=64, input_length=168)(main_input)
-conv1d = Conv1D(filters=32, kernel_size=3, padding='valid')(emb)
-bn = BatchNormalization()(conv1d)
-sgconv1d = Activation('sigmoid')(bn)
-conv1d_2 = Conv1D(filters = 32, kernel_size = 3, padding = 'valid')(sgconv1d)
-bn2 = BatchNormalization()(conv1d_2)
-sgconv1d_2 = Activation('sigmoid')(bn2)
-#conv = Multiply()([conv1d, sgconv1d])
-#pool = MaxPooling1D(pool_size = 32)(conv)
-out = Flatten()(sgconv1d_2)
-out = Dense(512, activation = 'relu')(out)
-out = Dense(256, activation = 'relu')(out)
-
-loss = Dense(1, activation = 'linear')(out)
-
-model = Model(inputs = [main_input], outputs = [loss])
-model.compile(loss='mean_absolute_percentage_error', optimizer = 'Adam', \
-              metrics=['mean_squared_error', 'mean_absolute_percentage_error'])
 
 LR = LinearRegression()
 LR.fit(x_train, y_train)

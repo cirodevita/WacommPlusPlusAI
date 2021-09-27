@@ -32,35 +32,35 @@ def remove_measures_duplicates():
 
     lines = pd.read_csv(cfg.get('files', 'MEASURES'), delimiter=';')
     for line in lines.iterrows():
-        if line[1]['ANNO ACCETTAZIONE'] in years:
-            id = line[1]['NUMERO SCHEDA']
-            date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
+        if line[1]['year'] in years:
+            date = str(line[1]['datetime']) + cfg.get('variables', 'SAMPLE_HOUR')
             try:
-                outcome = int(line[1]['ESITO'])
+                outcome = float(line[1]['outcome'])
+                if outcome < 67.0:
+                    outcome = 10.0
             except:
-                outcome = line[1]['ESITO']
-            site = line[1]['SITO']
-            lat = line[1]['LATITUDINE_DEF']
-            lon = line[1]['LONGITUDINE_DEF']
-            year = line[1]['ANNO ACCETTAZIONE']
+                outcome = line[1]['outcome']
+            year = line[1]['year']
+            code = line[1]['code']
+
+            id = str(code) + "_" + date
 
             if not any(d['id'] == id for d in measures):
-                measures.append({"id": id, 'site_name': site, 'datetime': date, 'latitude': lat, 'longitude': lon,
-                                     'outcome': [outcome], 'year': year})
+                measures.append({"id": id, "year": year, "datetime": date, "code": code, "outcome": [outcome]})
             else:
-                index = [i for i, _ in enumerate(measures) if _['id'] == id][0]
-                measures[index]['outcome'].append(outcome)
+                index = [i for i, _ in enumerate(measures) if _["id"] == id][0]
+                measures[index]["outcome"].append(outcome)
 
     for measure in measures:
         try:
             if cfg.get('variables', 'TYPE') == "MEAN":
-                measure['outcome'] = round(statistics.mean(measure['outcome']), 2)
+                measure["outcome"] = round(statistics.mean(measure["outcome"]), 2)
             elif cfg.get('variables', 'TYPE') == "MAX":
-                measure['outcome'] = max(measure['outcome'])
+                measure["outcome"] = max(measure["outcome"])
             else:
-                measure['outcome'] = max(measure['outcome'])
+                measure["outcome"] = max(measure["outcome"])
         except:
-            measure['outcome'] = measure['outcome'][0]
+            measure["outcome"] = measure["outcome"][0]
 
     return measures
 
@@ -113,7 +113,7 @@ def getConc(url, lat, long, index_min_lat, index_min_long, area_poly):
 # WORKER
 def worker(areas, lat, long, delta_lat, delta_long, measure):
     index = [i for i, _ in enumerate(areas) if
-             (_['properties']['DENOMINAZI']).replace(" ", "") == (measure['site_name']).replace(" ", "")][0]
+             str(_['properties']['CODICE']) == str(measure['code'])][0]
 
     bbox = areas[index]['bbox']
     min_long = bbox[0]
@@ -133,7 +133,7 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
 
     year = measure['year']
 
-    _dataset = {"features": [], "label": sample, "id": id, "site": measure['site_name'], 'year': year}
+    _dataset = {"features": [], "label": sample, "id": id, 'year': year}
     features = []
 
     print(measure)
@@ -156,10 +156,9 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
         value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        # max = np.random.randint(150)
-        # max = 10
+        # value = np.random.randint(150)
 
-        print(id, measure['site_name'], value, reference_hour)
+        print(id, value, reference_hour)
 
         features.append(str(value))
 
@@ -207,6 +206,7 @@ def get_lat_long():
 
 if __name__ == "__main__":
     start = time.time()
+
     areas = load_areas()
     max_measures = remove_measures_duplicates()
 
