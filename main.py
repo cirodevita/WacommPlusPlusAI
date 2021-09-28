@@ -32,16 +32,16 @@ def remove_measures_duplicates():
 
     lines = pd.read_csv(cfg.get('files', 'MEASURES'), delimiter=';')
     for line in lines.iterrows():
-        if line[1]['year'] in years:
-            date = str(line[1]['datetime']) + cfg.get('variables', 'SAMPLE_HOUR')
+        if line[1]['ANNO ACCETTAZIONE'] in years:
+            date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
             try:
-                outcome = float(line[1]['outcome'])
+                outcome = float(line[1]['ESITO'])
                 if outcome < 67.0:
                     outcome = 10.0
             except:
-                outcome = line[1]['outcome']
-            year = str(line[1]['year'])
-            code = str(line[1]['code'])
+                outcome = line[1]['ESITO']
+            year = str(line[1]['ANNO ACCETTAZIONE'])
+            code = str(line[1]['Codice SITO'])
 
             id = str(code) + "_" + date
 
@@ -155,8 +155,8 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
               ".nc?conc[0:1:0][0:1:1][" + str(index_min_lat) + ":1:" + str(index_max_lat) + "][" + \
               str(index_min_long) + ":1:" + str(index_max_long) + "]"
 
-        # value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
-        value = np.random.randint(150)
+        value = getConc(url, lat, long, index_min_lat, index_min_long, area_poly)
+        # value = np.random.randint(150)
 
         print(id, value, reference_hour)
 

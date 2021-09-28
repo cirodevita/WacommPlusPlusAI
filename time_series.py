@@ -97,7 +97,8 @@ def create_timeseries(lat, long, delta_lat, delta_long, max_measures, areas):
 
 def create_graphics(time_series):
     for time in time_series:
-        directory_name = "graphics/" + cfg.get('variables', 'TYPE') + "_" + (time["name"]).replace("/", "")
+        directory_name = "graphics/" + "/" + cfg.get('time_series', 'YEAR') + "/" + cfg.get('variables', 'TYPE') + "_" \
+                         + (time["name"]).replace("/", "")
         Path(directory_name).mkdir(parents=True, exist_ok=True)
 
         hours = []
