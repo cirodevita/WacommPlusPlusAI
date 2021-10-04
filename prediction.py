@@ -281,19 +281,8 @@ model = keras.Sequential([
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 model.summary()
 
-model.fit(x_train, y_train, epochs=100)
+history = model.fit(x_train, y_train, epochs=100)
 
-y_test = np.argmax(y_test, axis=1)
-y_pred = np.argmax(model.predict(x_test), axis=1)
-print(y_pred)
-
-print("CNN")
-print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, "CNN")
-
-
-# PLOT CNN ACCURACY AND TRAINING/TEST ERROR
-"""
 test_loss, test_acc = model.evaluate(x_test,  y_test, verbose=2)
 
 plt.plot(history.history['accuracy'])
@@ -311,7 +300,15 @@ plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
 plt.show()
-"""
+
+y_test = np.argmax(y_test, axis=1)
+y_pred = np.argmax(model.predict(x_test), axis=1)
+print(y_pred)
+
+print("CNN")
+print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
+print_confusion_matrix(y_pred, y_test, "CNN")
+
 
 # CREATE CSV FILE
 """
