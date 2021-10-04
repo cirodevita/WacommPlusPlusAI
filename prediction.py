@@ -251,7 +251,6 @@ labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
 m = KnnDtw(n_neighbors=2, max_warping_window=5)
 m.fit(x_train, y_train)
 y_pred, _ = m.predict(x_test)
-print(y_pred)
 print("KNN + DTW")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
 print_confusion_matrix(y_pred, y_test, "KNN + DTW")
@@ -260,7 +259,6 @@ print_confusion_matrix(y_pred, y_test, "KNN + DTW")
 neigh = KNeighborsClassifier(n_neighbors=2)
 neigh.fit(x_train, y_train)
 y_pred = neigh.predict(x_test)
-print(y_pred)
 print("KNeighborsClassifier")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
 print_confusion_matrix(y_pred, y_test, "KNeighborsClassifier")
@@ -281,7 +279,7 @@ model = keras.Sequential([
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 model.summary()
 
-history = model.fit(x_train, y_train, epochs=100)
+history = model.fit(x_train, y_train, epochs=100, validation_split=0.2)
 
 test_loss, test_acc = model.evaluate(x_test,  y_test, verbose=2)
 
@@ -303,7 +301,6 @@ plt.show()
 
 y_test = np.argmax(y_test, axis=1)
 y_pred = np.argmax(model.predict(x_test), axis=1)
-print(y_pred)
 
 print("CNN")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
