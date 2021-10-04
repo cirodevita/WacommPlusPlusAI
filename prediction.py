@@ -248,17 +248,17 @@ labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
 # 4: '4600-46000', 5: '>46000'}
 
 # KNN + DTW
-m = KnnDtw(n_neighbors=2, max_warping_window=5)
-m.fit(x_train, y_train)
-y_pred, _ = m.predict(x_test)
+model = KnnDtw(n_neighbors=2, max_warping_window=5)
+model.fit(x_train, y_train)
+y_pred, _ = model.predict(x_test)
 print("KNN + DTW")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
 print_confusion_matrix(y_pred, y_test, "KNN + DTW")
 
 # Baseline 2-KNN
-neigh = KNeighborsClassifier(n_neighbors=2)
-neigh.fit(x_train, y_train)
-y_pred = neigh.predict(x_test)
+model = KNeighborsClassifier(n_neighbors=2)
+model.fit(x_train, y_train)
+y_pred = model.predict(x_test)
 print("KNeighborsClassifier")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
 print_confusion_matrix(y_pred, y_test, "KNeighborsClassifier")
