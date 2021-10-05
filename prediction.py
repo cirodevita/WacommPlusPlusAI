@@ -1,3 +1,4 @@
+import collections
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,11 +7,13 @@ from clang.cindex import xrange
 from numpy import shape
 from scipy.stats import mode
 from scipy.spatial.distance import squareform
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from tensorflow import keras
 from tensorflow.python.keras.utils.np_utils import to_categorical
+
+from imblearn.over_sampling import SMOTE
 
 
 class KnnDtw(object):
@@ -216,7 +219,7 @@ class ProgressBar:
         return str(self.prog_bar)
 
 
-def print_confusion_matrix(y_pred, y_test, mode):
+def print_confusion_matrix(y_pred, y_test, labels, mode):
     conf_mat = confusion_matrix(y_pred, y_test)
 
     fig = plt.figure()
@@ -242,6 +245,11 @@ dataset = np.genfromtxt('dataset/dataset.csv', delimiter=';', skip_header=True)
 x = dataset[:, :hours]
 y = dataset[:, -1]
 
+y_0 = int(collections.Counter(y)[0.0])
+
+smt = SMOTE(sampling_strategy={0: y_0, 1: int(y_0/2), 2: int(y_0/2)})
+x, y = smt.fit_resample(x, y)
+
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, stratify=y)
 
 labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
@@ -253,7 +261,7 @@ model.fit(x_train, y_train)
 y_pred, _ = model.predict(x_test)
 print("KNN + DTW")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, "KNN + DTW")
+print_confusion_matrix(y_pred, y_test, labels, "KNN + DTW")
 
 # Baseline 2-KNN
 model = KNeighborsClassifier(n_neighbors=2)
@@ -261,7 +269,7 @@ model.fit(x_train, y_train)
 y_pred = model.predict(x_test)
 print("KNeighborsClassifier")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, "KNeighborsClassifier")
+print_confusion_matrix(y_pred, y_test, labels, "KNeighborsClassifier")
 
 # CNN
 n_classes = 3
@@ -279,7 +287,7 @@ model = keras.Sequential([
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 model.summary()
 
-history = model.fit(x_train, y_train, epochs=100, validation_split=0.2)
+history = model.fit(x_train, y_train, epochs=50, validation_split=0.2)
 
 test_loss, test_acc = model.evaluate(x_test,  y_test, verbose=2)
 
@@ -304,7 +312,7 @@ y_pred = np.argmax(model.predict(x_test), axis=1)
 
 print("CNN")
 print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, "CNN")
+print_confusion_matrix(y_pred, y_test, labels, "CNN")
 
 
 # CREATE CSV FILE
