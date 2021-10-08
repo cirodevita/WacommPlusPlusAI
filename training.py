@@ -15,9 +15,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from tensorflow import keras
 from tensorflow.python.keras.utils.np_utils import to_categorical
 from keras.utils.vis_utils import plot_model
-
 from imblearn.over_sampling import SMOTE
 
+training = 0
 
 class KnnDtw(object):
     def __init__(self, n_neighbors=5, max_warping_window=10000, subsample_step=1):
@@ -163,112 +163,107 @@ def print_confusion_matrix(y_pred, y_test, labels, mode):
     plt.show()
 
 
-hours = 168
+if training:
+    hours = 168
 
-dataset = np.genfromtxt('dataset/dataset.csv', delimiter=';', skip_header=True)
+    dataset = np.genfromtxt('dataset/dataset.csv', delimiter=';', skip_header=True)
 
-x = dataset[:, :hours]
-y = dataset[:, -1]
+    x = dataset[:, :hours]
+    y = dataset[:, -1]
 
-y_0 = int(collections.Counter(y)[0.0])
+    y_0 = int(collections.Counter(y)[0.0])
 
-smt = SMOTE(sampling_strategy={1: int(y_0 / 2), 2: int(y_0 / 2)})
-x, y = smt.fit_resample(x, y)
+    smt = SMOTE(sampling_strategy={1: int(y_0 / 2), 2: int(y_0 / 2)})
+    x, y = smt.fit_resample(x, y)
 
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, stratify=y)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, stratify=y)
 
-labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
-# 4: '4600-46000', 5: '>46000'}
+    labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
+    # 4: '4600-46000', 5: '>46000'}
 
-"""
-# KNN + DTW
-model_knn_dtw = KnnDtw(n_neighbors=2, max_warping_window=5)
-model_knn_dtw.fit(x_train, y_train)
-# joblib.dump(model_knn_dtw, "KNN_DTW")
-y_pred, _ = model_knn_dtw.predict(x_test)
-print("Class: ", y_pred)
-print("KNN + DTW")
-print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, labels, "KNN + DTW")
+    # Baseline 2-KNN
+    model_knn = KNeighborsClassifier(n_neighbors=2)
+    model_knn.fit(x_train, y_train)
+    # knnPickle = open('KNeighborsClassifier', 'wb')
+    # pickle.dump(model_knn, knnPickle)
+    y_pred = model_knn.predict(x_test)
+    print("KNeighborsClassifier")
+    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_pred, y_test, labels, "KNeighborsClassifier")
+
+    # CNN
+    x_train = x_train.reshape((x_train.shape[0], x_train.shape[1], 1))
+    x_test = x_test.reshape((x_test.shape[0], x_test.shape[1], 1))
+
+    n_classes = len(np.unique(y_train))
+    y_train = to_categorical(y_train, num_classes=n_classes)
+    y_test = to_categorical(y_test, num_classes=n_classes)
+
+    inputs1 = keras.layers.Input(x_train.shape[1:])
+    conv1 = keras.layers.Conv1D(filters=64, kernel_size=3, activation='relu')(inputs1)
+    drop1 = keras.layers.Dropout(0.5)(conv1)
+    pool1 = keras.layers.MaxPooling1D(pool_size=2)(drop1)
+    flat1 = keras.layers.Flatten()(pool1)
+
+    inputs2 = keras.layers.Input(x_train.shape[1:])
+    conv2 = keras.layers.Conv1D(filters=64, kernel_size=5, activation='relu')(inputs2)
+    drop2 = keras.layers.Dropout(0.5)(conv2)
+    pool2 = keras.layers.MaxPooling1D(pool_size=2)(drop2)
+    flat2 = keras.layers.Flatten()(pool2)
+
+    inputs3 = keras.layers.Input(x_train.shape[1:])
+    conv3 = keras.layers.Conv1D(filters=64, kernel_size=11, activation='relu')(inputs3)
+    drop3 = keras.layers.Dropout(0.5)(conv3)
+    pool3 = keras.layers.MaxPooling1D(pool_size=2)(drop3)
+    flat3 = keras.layers.Flatten()(pool3)
+
+    merged = keras.layers.concatenate([flat1, flat2, flat3])
+
+    dense1 = keras.layers.Dense(100, activation='relu')(merged)
+    outputs = keras.layers.Dense(n_classes, activation='softmax')(dense1)
+    model = Model(inputs=[inputs1, inputs2, inputs3], outputs=outputs)
+
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+
+    # plot_model(model, to_file='model_cnn.png', show_shapes=True, show_layer_names=True)
+
+    history = model.fit([x_train, x_train, x_train], y_train, epochs=60, batch_size=hours, validation_split=0.2)
+    # model.save("CNN")
+    test_loss, test_acc = model.evaluate([x_test, x_test, x_test], y_test, verbose=2)
+
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.show()
+
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.show()
+
+    y_test = np.argmax(y_test, axis=1)
+    y_pred = np.argmax(model.predict([x_test, x_test, x_test]), axis=1)
+    print("CNN")
+    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_pred, y_test, labels, "CNN")
 
 
-# Baseline 2-KNN
-model_knn = KNeighborsClassifier(n_neighbors=2)
-model_knn.fit(x_train, y_train)
-# joblib.dump(model_knn, "KNeighborsClassifier")
-y_pred = model_knn.predict(x_test)
-print("Class: ", y_pred)
-print("KNeighborsClassifier")
-print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, labels, "KNeighborsClassifier")
-"""
-
-
-# CNN
-x_train = x_train.reshape((x_train.shape[0], x_train.shape[1], 1))
-x_test = x_test.reshape((x_test.shape[0], x_test.shape[1], 1))
-
-n_classes = len(np.unique(y_train))
-y_train = to_categorical(y_train, num_classes=n_classes)
-y_test = to_categorical(y_test, num_classes=n_classes)
-
-inputs1 = keras.layers.Input(x_train.shape[1:])
-conv1 = keras.layers.Conv1D(filters=64, kernel_size=3, activation='relu')(inputs1)
-drop1 = keras.layers.Dropout(0.5)(conv1)
-pool1 = keras.layers.MaxPooling1D(pool_size=2)(drop1)
-flat1 = keras.layers.Flatten()(pool1)
-
-inputs2 = keras.layers.Input(x_train.shape[1:])
-conv2 = keras.layers.Conv1D(filters=64, kernel_size=5, activation='relu')(inputs2)
-drop2 = keras.layers.Dropout(0.5)(conv2)
-pool2 = keras.layers.MaxPooling1D(pool_size=2)(drop2)
-flat2 = keras.layers.Flatten()(pool2)
-
-inputs3 = keras.layers.Input(x_train.shape[1:])
-conv3 = keras.layers.Conv1D(filters=64, kernel_size=11, activation='relu')(inputs3)
-drop3 = keras.layers.Dropout(0.5)(conv3)
-pool3 = keras.layers.MaxPooling1D(pool_size=2)(drop3)
-flat3 = keras.layers.Flatten()(pool3)
-
-merged = keras.layers.concatenate([flat1, flat2, flat3])
-
-dense1 = keras.layers.Dense(100, activation='relu')(merged)
-outputs = keras.layers.Dense(n_classes, activation='softmax')(dense1)
-model = Model(inputs=[inputs1, inputs2, inputs3], outputs=outputs)
-
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.summary()
-
-# plot_model(model, to_file='model_cnn.png', show_shapes=True, show_layer_names=True)
-
-history = model.fit([x_train, x_train, x_train], y_train, epochs=60, batch_size=hours, validation_split=0.2)
-model.save("CNN")
-test_loss, test_acc = model.evaluate([x_test, x_test, x_test], y_test, verbose=2)
-
-plt.plot(history.history['accuracy'])
-plt.plot(history.history['val_accuracy'])
-plt.title('model accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
-
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
-
-y_test = np.argmax(y_test, axis=1)
-y_pred = np.argmax(model.predict([x_test, x_test, x_test]), axis=1)
-
-print("Class: ", y_pred)
-print("CNN")
-print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-print_confusion_matrix(y_pred, y_test, labels, "CNN")
-
+    # KNN + DTW
+    model_knn_dtw = KnnDtw(n_neighbors=2, max_warping_window=5)
+    model_knn_dtw.fit(x_train, y_train)
+    # with open("KNN_DTW.pkl", "wb") as knndtwPickle:
+    #    pickle.dump(model_knn_dtw, knndtwPickle)
+    y_pred, _ = model_knn_dtw.predict(x_test)
+    print("KNN + DTW")
+    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_pred, y_test, labels, "KNN + DTW")
 
 """
 # CREATE CSV FILE
