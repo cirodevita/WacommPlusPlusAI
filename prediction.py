@@ -1,10 +1,11 @@
+from netCDF4 import Dataset
 import sys
 from datetime import datetime, timedelta
-
 import pickle
 import numpy as np
+from shapely.geometry import Polygon, Point
 from tensorflow import keras
-from main import load_areas, get_lat_long, worker
+from main import load_areas, get_lat_long, worker, get_index_lat_long
 from training import KnnDtw
 import matplotlib.pyplot as plt
 from configparser import ConfigParser
@@ -64,5 +65,98 @@ if __name__ == "__main__":
         print("[CNN] Class: ", y_pred_cnn[0])
         print("[KNeighborsClassifier] Class: ", int(y_pred_knn[0]))
         print("[KNN_DTW] Class: ", int(y_pred_knn_dtw[0]))
+
+        print("End Prediction!")
+
+        print("Creating NetCDF...")
+        src = cfg.get('variables', 'URL') + _datetime[0:4] + "/" + _datetime[4:6] + "/" + _datetime[6:8] + \
+              "/wcm3_d03_" + _datetime + ".nc"
+        dst = "test/wcm3_d03_20211008Z1200_class.nc.nc4"
+
+        # Open the NetCDF file
+        ncsrcfile = Dataset(src)
+
+        ncols = len(long)
+        nrows = len(lat)
+
+        conc = ncsrcfile.variables["conc"][:]
+        sfconc = ncsrcfile.variables["sfconc"][:]
+
+        index = [i for i, _ in enumerate(areas) if
+                 str(_['properties']['CODICE']) == str(code)][0]
+
+        bbox = areas[index]['bbox']
+        min_long = bbox[0]
+        min_lat = bbox[1]
+        max_long = bbox[2]
+        max_lat = bbox[3]
+
+        coordinates = areas[index]['geometry']['coordinates'][0][0]
+
+        area_poly = Polygon(coordinates)
+
+        index_min_lat, index_max_lat, index_min_long, index_max_long = get_index_lat_long(lat, long,
+                                                                                          delta_lat, delta_long,
+                                                                                          min_lat, max_lat,
+                                                                                          min_long, max_long)
+
+        ncdstfile = Dataset(dst, "w", format="NETCDF4")
+
+        timeDim = ncdstfile.createDimension("time", size=1)
+        depthDim = ncdstfile.createDimension("depth", size=11)
+        latDim = ncdstfile.createDimension("latitude", size=nrows)
+        lonDim = ncdstfile.createDimension("longitude", size=ncols)
+
+        timeVar = ncdstfile.createVariable("time", "i4", "time")
+        timeVar.description = "Time since initialization"
+        timeVar.long_name = "time since initialization"
+        timeVar.units = "seconds since 1968-05-23 00:00:00"
+        timeVar.calendar = "gregorian"
+        timeVar.field = "time, scalar, series"
+
+        depthVar = ncdstfile.createVariable("depth", "f4", "depth")
+        depthVar.description = "depth"
+        depthVar.long_name = "depth"
+        depthVar.units = "meters"
+
+        lonVar = ncdstfile.createVariable("longitude", "f4", "longitude")
+        lonVar.description = "Longitude"
+        lonVar.long_name = "longitude"
+        lonVar.units = "degrees_east"
+
+        latVar = ncdstfile.createVariable("latitude", "f4", "latitude")
+        latVar.description = "Latitude"
+        lonVar.long_name = "latitude"
+        latVar.units = "degrees_north"
+
+        concVar = ncdstfile.createVariable("conc", "f4", ("time", "depth", "latitude", "longitude"), fill_value=1.e+37)
+        concVar.description = "concentration of suspended matter in sea water"
+        concVar.units = "1"
+        concVar.long_name = "concentration"
+
+        sfconcVar = ncdstfile.createVariable("sfconc", "f4", ("time", "latitude", "longitude"), fill_value=1.e+37)
+        sfconcVar.description = "concentration of suspended matter at the surface"
+        sfconcVar.units = "1"
+        sfconcVar.long_name = "surface_concentration"
+
+        classVar = ncdstfile.createVariable("class_predict", "i1", ("time", "latitude", "longitude"), fill_value=0)
+        classVar.description = "predicted class of concentration of pollutants in mussels"
+        classVar.long_name = "class_predict"
+
+        timeVar[:] = ncsrcfile.variables["time"][:]
+        depthVar[:] = [0, -2.5, -5, -10, -15, -20, -25, -50, -100, -200, -300]
+        lonVar[:] = long
+        latVar[:] = lat
+        concVar[:] = conc
+        sfconcVar[:] = sfconc
+
+        for i in range(index_min_lat, index_max_lat):
+            for j in range(index_min_long, index_max_long):
+                point = Point(long[j], lat[i])
+                if point.within(area_poly):
+                    classVar[0, i, j] = y_pred_knn + 1
+
+        ncdstfile.close()
+
     else:
         print("Usage: datetime area_code")
