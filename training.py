@@ -1,6 +1,7 @@
+import json
+import pandas as pd
 import collections
 import sys
-
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,7 +10,8 @@ from keras import Model
 from numpy import shape
 from scipy.stats import mode
 from scipy.spatial.distance import squareform
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn import svm
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from tensorflow import keras
@@ -17,7 +19,9 @@ from tensorflow.python.keras.utils.np_utils import to_categorical
 from keras.utils.vis_utils import plot_model
 from imblearn.over_sampling import SMOTE
 
-training = 0
+training = 1
+csv = 0
+
 
 class KnnDtw(object):
     def __init__(self, n_neighbors=5, max_warping_window=10000, subsample_step=1):
@@ -177,9 +181,22 @@ if training:
     x, y = smt.fit_resample(x, y)
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, stratify=y)
+    n_classes = len(np.unique(y_train))
 
     labels = {0: '0-67', 1: '67-230', 2: '230-4600'}
     # 4: '4600-46000', 5: '>46000'}
+
+    # DISTANCE BASED
+
+    # KNN + DTW
+    model_knn_dtw = KnnDtw(n_neighbors=2, max_warping_window=5)
+    model_knn_dtw.fit(x_train, y_train)
+    # with open("KNN_DTW.pkl", "wb") as knndtwPickle:
+    #    pickle.dump(model_knn_dtw, knndtwPickle)
+    y_pred, _ = model_knn_dtw.predict(x_test)
+    print("KNN + DTW")
+    print(classification_report(y_test, y_pred, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_test, y_pred, labels, "KNN + DTW")
 
     # Baseline 2-KNN
     model_knn = KNeighborsClassifier(n_neighbors=2)
@@ -188,30 +205,31 @@ if training:
     # pickle.dump(model_knn, knnPickle)
     y_pred = model_knn.predict(x_test)
     print("KNeighborsClassifier")
-    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-    print_confusion_matrix(y_pred, y_test, labels, "KNeighborsClassifier")
+    print(classification_report(y_test, y_pred, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_test, y_pred, labels, "KNeighborsClassifier")
 
-    # CNN
-    x_train = x_train.reshape((x_train.shape[0], x_train.shape[1], 1))
-    x_test = x_test.reshape((x_test.shape[0], x_test.shape[1], 1))
+    # FEATURE BASED
 
-    n_classes = len(np.unique(y_train))
+    x_train_deep = x_train.reshape((x_train.shape[0], x_train.shape[1], 1))
+    x_test_deep = x_test.reshape((x_test.shape[0], x_test.shape[1], 1))
+
     y_train = to_categorical(y_train, num_classes=n_classes)
     y_test = to_categorical(y_test, num_classes=n_classes)
 
-    inputs1 = keras.layers.Input(x_train.shape[1:])
+    # CNN
+    inputs1 = keras.layers.Input(x_train_deep.shape[1:])
     conv1 = keras.layers.Conv1D(filters=64, kernel_size=3, activation='relu')(inputs1)
     drop1 = keras.layers.Dropout(0.5)(conv1)
     pool1 = keras.layers.MaxPooling1D(pool_size=2)(drop1)
     flat1 = keras.layers.Flatten()(pool1)
 
-    inputs2 = keras.layers.Input(x_train.shape[1:])
+    inputs2 = keras.layers.Input(x_train_deep.shape[1:])
     conv2 = keras.layers.Conv1D(filters=64, kernel_size=5, activation='relu')(inputs2)
     drop2 = keras.layers.Dropout(0.5)(conv2)
     pool2 = keras.layers.MaxPooling1D(pool_size=2)(drop2)
     flat2 = keras.layers.Flatten()(pool2)
 
-    inputs3 = keras.layers.Input(x_train.shape[1:])
+    inputs3 = keras.layers.Input(x_train_deep.shape[1:])
     conv3 = keras.layers.Conv1D(filters=64, kernel_size=11, activation='relu')(inputs3)
     drop3 = keras.layers.Dropout(0.5)(conv3)
     pool3 = keras.layers.MaxPooling1D(pool_size=2)(drop3)
@@ -228,9 +246,9 @@ if training:
 
     # plot_model(model, to_file='model_cnn.png', show_shapes=True, show_layer_names=True)
 
-    history = model.fit([x_train, x_train, x_train], y_train, epochs=60, batch_size=hours, validation_split=0.2)
+    history = model.fit([x_train_deep, x_train_deep, x_train_deep], y_train, epochs=60, batch_size=hours, validation_split=0.2)
     # model.save("CNN")
-    test_loss, test_acc = model.evaluate([x_test, x_test, x_test], y_test, verbose=2)
+    test_loss, test_acc = model.evaluate([x_test_deep, x_test_deep, x_test_deep], y_test, verbose=2)
 
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
@@ -248,64 +266,134 @@ if training:
     plt.legend(['train', 'test'], loc='upper left')
     plt.show()
 
-    y_test = np.argmax(y_test, axis=1)
-    y_pred = np.argmax(model.predict([x_test, x_test, x_test]), axis=1)
+    y_test_new = np.argmax(y_test, axis=1)
+    y_pred = np.argmax(model.predict([x_test_deep, x_test_deep, x_test_deep]), axis=1)
     print("CNN")
-    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-    print_confusion_matrix(y_pred, y_test, labels, "CNN")
+    print(classification_report(y_test_new, y_pred, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_test_new, y_pred, labels, "CNN")
 
+    # RESNET
+    n_feature_maps = 32
 
-    # KNN + DTW
-    model_knn_dtw = KnnDtw(n_neighbors=2, max_warping_window=5)
-    model_knn_dtw.fit(x_train, y_train)
-    # with open("KNN_DTW.pkl", "wb") as knndtwPickle:
-    #    pickle.dump(model_knn_dtw, knndtwPickle)
-    y_pred, _ = model_knn_dtw.predict(x_test)
-    print("KNN + DTW")
-    print(classification_report(y_pred, y_test, target_names=[l for l in labels.values()]))
-    print_confusion_matrix(y_pred, y_test, labels, "KNN + DTW")
+    input_layer = keras.layers.Input(x_train_deep.shape[1:])
 
-"""
-# CREATE CSV FILE
-import json
-import numpy as np
-import pandas as pd
+    # BLOCK 1
 
-f = open('dataset/dataset.json')
-data = json.load(f)
-f.close()
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=8, padding='same')(input_layer)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
 
-lines = pd.read_csv("files/analisi_completa.csv", delimiter=';')
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
 
-features = []
-labels = []
-labels_values = []
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
 
-hours = 72
+    # expand channels for the sum
+    shortcut_y = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=1, padding='same')(input_layer)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
 
-for d in data:
-    for line in lines.iterrows():
-        if d['id'].replace("/10:00", "") == line[1]['id'] and line[1]['COERENZA'] == "SI":
-            if "NaN" not in d['features']:
-                features.append(d['features'][0:hours])
-                if 0.0 <= float(d['label']) <= 67.0:
-                    labels.append(0)
-                elif 67.0 < float(d['label']) <= 230.0:
-                    labels.append(1)
-                elif 230.0 < float(d['label']) <= 4600.0:
-                    labels.append(2)
-                elif 4600.0 < float(d['label']) <= 46000.0:
-                    labels.append(3)
-                else:
-                    labels.append(4)
+    output_block_1 = keras.layers.add([shortcut_y, conv_z])
+    output_block_1 = keras.layers.Activation('relu')(output_block_1)
 
-features = np.array(features, float)
+    # BLOCK 2
 
-x = pd.DataFrame(features)
-x.columns = ["Feature " + str(i) for i in range(0, len(x.columns))]
-y = pd.DataFrame(labels)
-y.columns = ["Label (class)"]
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_1)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
 
-dataframe = pd.concat([x, y], axis=1)
-dataframe.to_csv("dataset/dataset.csv", sep=";", index=False)
-"""
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+    # expand channels for the sum
+    shortcut_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=1, padding='same')(output_block_1)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
+
+    output_block_2 = keras.layers.add([shortcut_y, conv_z])
+    output_block_2 = keras.layers.Activation('relu')(output_block_2)
+
+    # BLOCK 3
+
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_2)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
+
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+    # no need to expand channels because they are equal
+    shortcut_y = keras.layers.BatchNormalization()(output_block_2)
+
+    output_block_3 = keras.layers.add([shortcut_y, conv_z])
+    output_block_3 = keras.layers.Activation('relu')(output_block_3)
+
+    # FINAL
+
+    gap_layer = keras.layers.GlobalAveragePooling1D()(output_block_3)
+
+    output_layer = keras.layers.Dense(n_classes, activation='softmax')(gap_layer)
+
+    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
+
+    model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.Adam(),
+                  metrics=['accuracy'])
+
+    model.summary()
+
+    mini_batch_size = int(min(x_train_deep.shape[0] / 10, 32))
+    model.fit(x_train_deep, y_train, epochs=100, batch_size=mini_batch_size, validation_split=0.2)
+    # model.save("ResNet")
+
+    y_test_new = np.argmax(y_test, axis=1)
+    y_pred = np.argmax(model.predict(x_test_deep), axis=1)
+    print("ResNet")
+    print(classification_report(y_test_new, y_pred, target_names=[l for l in labels.values()]))
+    print_confusion_matrix(y_test_new, y_pred, labels, "ResNet")
+
+elif csv:
+    f = open('dataset/dataset.json')
+    data = json.load(f)
+    f.close()
+
+    lines = pd.read_csv("files/analisi_completa.csv", delimiter=';')
+
+    features = []
+    labels = []
+    labels_values = []
+
+    hours = 72
+
+    for d in data:
+        for line in lines.iterrows():
+            if d['id'].replace("/10:00", "") == line[1]['id'] and line[1]['COERENZA'] == "SI":
+                if "NaN" not in d['features']:
+                    features.append(d['features'][0:hours])
+                    if 0.0 <= float(d['label']) <= 67.0:
+                        labels.append(0)
+                    elif 67.0 < float(d['label']) <= 230.0:
+                        labels.append(1)
+                    elif 230.0 < float(d['label']) <= 4600.0:
+                        labels.append(2)
+                    elif 4600.0 < float(d['label']) <= 46000.0:
+                        labels.append(3)
+                    else:
+                        labels.append(4)
+
+    features = np.array(features, float)
+
+    x = pd.DataFrame(features)
+    x.columns = ["Feature " + str(i) for i in range(0, len(x.columns))]
+    y = pd.DataFrame(labels)
+    y.columns = ["Label (class)"]
+
+    dataframe = pd.concat([x, y], axis=1)
+    dataframe.to_csv("dataset/dataset.csv", sep=";", index=False)
