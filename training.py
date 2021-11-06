@@ -10,8 +10,7 @@ from keras import Model
 from numpy import shape
 from scipy.stats import mode
 from scipy.spatial.distance import squareform
-from sklearn import svm
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from tensorflow import keras
@@ -19,8 +18,9 @@ from tensorflow.python.keras.utils.np_utils import to_categorical
 from keras.utils.vis_utils import plot_model
 from imblearn.over_sampling import SMOTE
 
-training = 1
-csv = 0
+from configparser import ConfigParser
+cfg = ConfigParser()
+cfg.read('config.ini')
 
 
 class KnnDtw(object):
@@ -167,10 +167,10 @@ def print_confusion_matrix(y_pred, y_test, labels, mode):
     plt.show()
 
 
-if training:
+if cfg.get('training', 'TRAINING'):
     hours = 168
 
-    dataset = np.genfromtxt('dataset/dataset.csv', delimiter=';', skip_header=True)
+    dataset = np.genfromtxt(cfg.get('training', 'DATASET_FILE_CSV'), delimiter=';', skip_header=True)
 
     x = dataset[:, :hours]
     y = dataset[:, -1]
@@ -359,12 +359,12 @@ if training:
     print(classification_report(y_test_new, y_pred, target_names=[l for l in labels.values()]))
     print_confusion_matrix(y_test_new, y_pred, labels, "ResNet")
 
-elif csv:
-    f = open('dataset/dataset.json')
+elif cfg.get('training', 'CSV'):
+    f = open(cfg.get('training', 'DATASET_FILE_JSON'))
     data = json.load(f)
     f.close()
 
-    lines = pd.read_csv("files/analisi_completa.csv", delimiter=';')
+    lines = pd.read_csv(f=open(cfg.get('training', 'DATASET_FILE_JSON')), delimiter=';')
 
     features = []
     labels = []
@@ -396,4 +396,4 @@ elif csv:
     y.columns = ["Label (class)"]
 
     dataframe = pd.concat([x, y], axis=1)
-    dataframe.to_csv("dataset/dataset.csv", sep=";", index=False)
+    dataframe.to_csv(cfg.get('training', 'DATASET_FILE_CSV'), sep=";", index=False)

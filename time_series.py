@@ -171,7 +171,7 @@ if __name__ == "__main__":
     start = time.time()
 
     areas = load_areas()
-    max_measures = remove_measures_duplicates()
+    max_measures = remove_measures_duplicates(areas)
 
     lat, long, delta_lat, delta_long = get_lat_long()
 

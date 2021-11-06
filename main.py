@@ -25,31 +25,41 @@ def load_areas():
 
 
 # REMOVE MEASURES DUPLICATES
-def remove_measures_duplicates():
+def remove_measures_duplicates(areas):
     measures = []
+
+    list_files = cfg.get('files', 'MEASURES')
+    files = json.loads(list_files)
+
     list = cfg.get('variables', 'YEAR')
     years = json.loads(list)
 
-    lines = pd.read_csv(cfg.get('files', 'MEASURES'), delimiter=';')
-    for line in lines.iterrows():
-        if line[1]['ANNO ACCETTAZIONE'] in years:
-            date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
-            try:
-                outcome = float(line[1]['ESITO'])
-                if outcome < 67.0:
-                    outcome = 10.0
-            except:
-                outcome = line[1]['ESITO']
-            year = str(line[1]['ANNO ACCETTAZIONE'])
-            code = str(line[1]['Codice SITO'])
+    for file in files:
+        lines = pd.read_csv(file, delimiter=';')
+        for line in lines.iterrows():
+            if line[1]['ANNO ACCETTAZIONE'] in years:
+                date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
+                try:
+                    outcome = float(line[1]['ESITO'])
+                    if outcome < 67.0:
+                        outcome = 10.0
+                except:
+                    outcome = line[1]['ESITO']
+                year = str(line[1]['ANNO ACCETTAZIONE'])
+                try:
+                    code = str(line[1]['Codice SITO'])
+                except:
+                    index = [i for i, _ in enumerate(areas) if
+                             (_['properties']['DENOMINAZI']).replace(" ", "") == (line[1]['SITO']).replace(" ", "")][0]
+                    code = areas[index]["properties"]["CODICE"]
 
-            id = str(code) + "_" + date
+                id = str(code) + "_" + date
 
-            if not any(d['id'] == id for d in measures):
-                measures.append({"id": id, "year": year, "datetime": date, "code": code, "outcome": [outcome]})
-            else:
-                index = [i for i, _ in enumerate(measures) if _["id"] == id][0]
-                measures[index]["outcome"].append(outcome)
+                if not any(d['id'] == id for d in measures):
+                    measures.append({"id": id, "year": year, "datetime": date, "code": code, "outcome": [outcome]})
+                else:
+                    index = [i for i, _ in enumerate(measures) if _["id"] == id][0]
+                    measures[index]["outcome"].append(outcome)
 
     for measure in measures:
         try:
@@ -208,12 +218,14 @@ if __name__ == "__main__":
     start = time.time()
 
     areas = load_areas()
-    max_measures = remove_measures_duplicates()
+    max_measures = remove_measures_duplicates(areas)
 
     lat, long, delta_lat, delta_long = get_lat_long()
     dataset = create_dataset(areas, lat, long, delta_lat, delta_long, max_measures)
 
-    with open('dataset.json', 'w', encoding='utf-8') as f:
+    list = cfg.get('variables', 'YEAR')
+    years = json.loads(list)
+    with open('dataset_' + '_'.join(map(str, years)) + '.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
 
     end = time.time()
