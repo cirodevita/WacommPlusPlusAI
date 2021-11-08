@@ -103,8 +103,11 @@ def prediction(lat, long, delta_lat, delta_long, _datetime):
         day = '{:>02d}'.format(reference_hour.day)
 
         url = cfg.get('variables', 'URL') + year + "/" + month + "/" + day + "/wcm3_d03_" + formatted_hour + ".nc"
-        _dataset = Dataset(url)
-        concentration = _dataset['conc'][0][0]
+        try:
+            _dataset = Dataset(url)
+            concentration = _dataset['conc'][0][0]
+        except:
+            concentration = np.zeros((nrows, ncols))
 
         for area in areas:
             code = area['properties']['CODICE']
@@ -168,14 +171,19 @@ if __name__ == "__main__":
         if os.path.exists(sys.argv[1]):
             array = get_datatime(sys.argv[1])
             for date in array:
-                formatted_hour = datetime.strptime(date, '%d/%m/%y/%H:%M').strftime("%Y%m%dZ%H%M")
-                prediction(lat, long, delta_lat, delta_long, formatted_hour)
+                try:
+                    formatted_hour = datetime.strptime(date, '%d/%m/%y/%H:%M').strftime("%Y%m%dZ%H%M")
+                    prediction(lat, long, delta_lat, delta_long, formatted_hour)
+                except:
+                    print("Error!")
+                    continue
         else:
             try:
                 _datetime = sys.argv[1]
                 prediction(lat, long, delta_lat, delta_long, _datetime)
             except:
-                print("Datetime is bad formatted: YYYYMMDDZHHMM or is not a file")
+                print("Error!")
+                pass
 
         """
         # new_datetime = _datetime[6:8] + "/" + _datetime[4:6] + "/" + _datetime[2:4] + "/" + _datetime[9:11] + ":00"
