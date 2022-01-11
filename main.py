@@ -41,8 +41,6 @@ def remove_measures_duplicates(areas):
                 date = str(line[1]['DATA PRELIEVO']) + cfg.get('variables', 'SAMPLE_HOUR')
                 try:
                     outcome = float(line[1]['ESITO'])
-                    if outcome < 67.0:
-                        outcome = 10.0
                 except:
                     outcome = line[1]['ESITO']
                 year = str(line[1]['ANNO ACCETTAZIONE'])
@@ -67,6 +65,8 @@ def remove_measures_duplicates(areas):
                 measure["outcome"] = round(statistics.mean(measure["outcome"]), 2)
             elif cfg.get('variables', 'TYPE') == "MAX":
                 measure["outcome"] = max(measure["outcome"])
+            elif cfg.get('variables', 'TYPE') == "MEDIAN":
+                measure["outcome"] = round(statistics.median(measure["outcome"]), 2)
             else:
                 measure["outcome"] = max(measure["outcome"])
         except:
@@ -91,30 +91,23 @@ def getConc(url, lat, long, index_min_lat, index_min_long, area_poly):
 
         concentration = dataset['conc'][0][0]
 
-        if cfg.get('variables', 'TYPE') == "MEAN":
-            value = 0
-            n = 0
-        elif cfg.get('variables', 'TYPE') == "MAX":
-            value = np.float32("-inf")
-        else:
-            value = np.float32("-inf")
+        values = []
 
         for i in range(0, len(concentration)):
             for j in range(0, len(concentration[0])):
                 point = Point(long[index_min_long + j], lat[index_min_lat + i])
                 if point.within(area_poly):
                     current_value = concentration[i][j]
-                    if cfg.get('variables', 'TYPE') == "MEAN":
-                        value += current_value
-                        n += 1
-                    elif cfg.get('variables', 'TYPE') == "MAX":
-                        value = max(current_value, value)
-                    else:
-                        value = max(current_value, value)
+                    values.append(current_value)
         if cfg.get('variables', 'TYPE') == "MEAN":
-            value = round(value / n, 2)
+            value = round(statistics.mean(values), 2)
+        elif cfg.get('variables', 'TYPE') == "MAX":
+            value = max(values)
+        elif cfg.get('variables', 'TYPE') == "MEDIAN":
+            value = round(statistics.median(values), 2)
+        else:
+            value = "NaN"
     except Exception as e:
-        print(e)
         value = "NaN"
 
     return value
@@ -218,10 +211,10 @@ if __name__ == "__main__":
     start = time.time()
 
     areas = load_areas()
-    max_measures = remove_measures_duplicates(areas)
+    measures = remove_measures_duplicates(areas)
 
     lat, long, delta_lat, delta_long = get_lat_long()
-    dataset = create_dataset(areas, lat, long, delta_lat, delta_long, max_measures)
+    dataset = create_dataset(areas, lat, long, delta_lat, delta_long, measures)
 
     list = cfg.get('variables', 'YEAR')
     years = json.loads(list)

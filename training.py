@@ -364,7 +364,7 @@ elif cfg.get('training', 'CSV'):
     data = json.load(f)
     f.close()
 
-    lines = pd.read_csv(f=open(cfg.get('training', 'DATASET_FILE_JSON')), delimiter=';')
+    lines = pd.read_csv(f=open(cfg.get('training', 'ANALYSIS_FILE')), delimiter=';')
 
     features = []
     labels = []
