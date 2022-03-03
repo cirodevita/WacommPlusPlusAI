@@ -45,7 +45,7 @@ def remove_measures_duplicates(areas):
                     outcome = line[1]['ESITO']
                 year = str(line[1]['ANNO ACCETTAZIONE'])
                 try:
-                    code = str(line[1]['Codice SITO'])
+                    code = str(line[1]['CODICE SITO'])
                 except:
                     index = [i for i, _ in enumerate(areas) if
                              (_['properties']['DENOMINAZI']).replace(" ", "") == (line[1]['SITO']).replace(" ", "")][0]
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
     list = cfg.get('variables', 'YEAR')
     years = json.loads(list)
-    with open('dataset_' + '_'.join(map(str, years)) + '.json', 'w', encoding='utf-8') as f:
+    with open('dataset_' + cfg.get('variables', 'TYPE').lower() + '_'.join(map(str, years)) + '.json', 'w', encoding='utf-8') as f:
         json.dump(dataset, f)
 
     end = time.time()
