@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import Polygon
 
-from main import load_areas, remove_measures_duplicates, get_lat_long, get_index_lat_long, getConc
+from main import load_areas, remove_measures_duplicates, get_lat_long, get_index_lat_long, getConc, addKM2Coordinates
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -22,6 +22,10 @@ def worker(year, month, day, hours, lat, long, delta_lat, delta_long, max_measur
     min_lat = bbox[1]
     max_long = bbox[2]
     max_lat = bbox[3]
+
+    if cfg.getboolean('variables', 'BUFFER'):
+        max_lat, max_long = addKM2Coordinates(max_lat, max_long, 45)
+        min_lat, min_long = addKM2Coordinates(min_lat, min_long, 225)
 
     coordinates = area['geometry']['coordinates'][0][0]
     area_poly = Polygon(coordinates)
@@ -157,7 +161,10 @@ def create_graphics(time_series):
                         plt.fill_between(x, 0, y, color='green',
                                          where=(x < k) & (x > k - timedelta(hours=72)))
 
-                fig.savefig(directory_name + "/" + str(calendar.month_name[int(temp_month)]) + "-" + str(year) + ".png",
+                if cfg.getboolean('variables', 'BUFFER'):
+                    fig.savefig((time["name"]).replace("/", "") + "_" + cfg.get('variables', 'RANGE_BUFFER') + ".png", dpi=100)
+                else:
+                    fig.savefig(directory_name + "/" + str(calendar.month_name[int(temp_month)]) + "-" + str(year) + ".png",
                             dpi=100)
 
                 hours.clear()

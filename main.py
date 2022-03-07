@@ -1,4 +1,5 @@
 import concurrent.futures
+import math
 from functools import partial
 import multiprocessing
 import numpy as np
@@ -95,10 +96,13 @@ def getConc(url, lat, long, index_min_lat, index_min_long, area_poly):
 
         for i in range(0, len(concentration)):
             for j in range(0, len(concentration[0])):
-                point = Point(long[index_min_long + j], lat[index_min_lat + i])
-                if point.within(area_poly):
-                    current_value = concentration[i][j]
+                current_value = concentration[i][j]
+                if cfg.getboolean('variables', 'BUFFER'):
                     values.append(current_value)
+                else:
+                    point = Point(long[index_min_long + j], lat[index_min_lat + i])
+                    if point.within(area_poly):
+                        values.append(current_value)
         if cfg.get('variables', 'TYPE') == "MEAN":
             value = round(statistics.mean(values), 2)
         elif cfg.get('variables', 'TYPE') == "MAX":
@@ -107,7 +111,9 @@ def getConc(url, lat, long, index_min_lat, index_min_long, area_poly):
             value = round(statistics.median(values), 2)
         else:
             value = "NaN"
+
     except Exception as e:
+        print(e)
         value = "NaN"
 
     return value
@@ -125,8 +131,11 @@ def worker(areas, lat, long, delta_lat, delta_long, measure):
     max_lat = bbox[3]
 
     coordinates = areas[index]['geometry']['coordinates'][0][0]
-
     area_poly = Polygon(coordinates)
+
+    if cfg.getboolean('variables', 'BUFFER'):
+        max_lat, max_long = addKM2Coordinates(max_lat, max_long, 45)
+        min_lat, min_long = addKM2Coordinates(min_lat, min_long, 225)
 
     id = measure["id"]
 
@@ -183,6 +192,27 @@ def create_dataset(areas, lat, long, delta_lat, delta_long, max_measures):
             my_dataset.append(result)
 
     return my_dataset
+
+
+# ADD KM TO COORDINATES
+def addKM2Coordinates(latitude, longitude, bearing):
+    R = 6378.1
+    d = cfg.getfloat('variables', 'RANGE_BUFFER')
+    bearing = math.radians(bearing)
+
+    lat1 = math.radians(latitude)
+    lon1 = math.radians(longitude)
+
+    lat2 = math.asin(math.sin(lat1) * math.cos(d / R) +
+                     math.cos(lat1) * math.sin(d / R) * math.cos(bearing))
+
+    lon2 = lon1 + math.atan2(math.sin(bearing) * math.sin(d / R) * math.cos(lat1),
+                             math.cos(d / R) - math.sin(lat1) * math.sin(lat2))
+
+    lat2 = math.degrees(lat2)
+    lon2 = math.degrees(lon2)
+
+    return lat2, lon2
 
 
 # GET LAT/LONG ARRAY ONLY ONE TIME
